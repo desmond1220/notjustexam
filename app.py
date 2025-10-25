@@ -83,9 +83,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # Extract question text with proper formatting
         question_div = soup.find('div', class_='question')
         if question_div:
-            # Use separator to maintain paragraph structure
             result['question'] = question_div.get_text(separator='\n\n').strip()
-            # Check for images
             images = question_div.find_all('img')
             result['images'] = [img.get('src', '') for img in images]
         
@@ -96,10 +94,8 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             letter_span = item.find('span', class_='multi-choice-letter')
             if letter_span:
                 letter = letter_span.get('data-choice-letter', '')
-                # Get choice text, preserving internal formatting
                 choice_text = item.get_text(separator=' ').replace(letter + '.', '', 1).strip()
                 choices[letter] = choice_text
-                # Check if this is the correct answer
                 if 'correct-hidden' in item.get('class', []):
                     result['correct_answer'] = letter
         result['choices'] = choices
@@ -109,7 +105,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         answer_div = soup.find('div', class_='answer')
         if answer_div:
             suggested_answer_text = answer_div.get_text(separator=' ').strip()
-            # Extract the answer letter
             match = re.search(r'Suggested Answer:\s*([A-Z])', suggested_answer_text)
             if match:
                 result['suggested_answer'] = match.group(1)
@@ -117,60 +112,89 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # Extract discussion summary with proper formatting
         discussion_div = soup.find('div', class_='discussion-summary')
         if discussion_div:
-            # Remove the header if present
             header = discussion_div.find('h3')
             if header:
                 header.decompose()
-            
-            # Get formatted text with paragraphs preserved
             discussion_text = discussion_div.get_text(separator='\n\n').strip()
             result['discussion_summary'] = discussion_text
         
         # Extract AI recommendation with proper formatting
         ai_div = soup.find('div', class_='ai-recommendation')
         if ai_div:
-            # Remove the header if present
-            header = ai_div.find('h3')
-            if header:
+            # Remove headers
+            for header in ai_div.find_all('h3'):
                 header.decompose()
             
-            # Extract main content preserving structure
+            # Find all UL elements (both direct children and nested in P tags)
+            all_uls = ai_div.find_all('ul')
+            
+            # Separate citations from content lists
+            citation_ul = None
+            content_uls = []
+            
+            for ul in all_uls:
+                # Check if this is a citation list (contains links)
+                first_li = ul.find('li')
+                if first_li and 'http' in first_li.get_text():
+                    citation_ul = ul
+                else:
+                    content_uls.append(ul)
+            
+            # Extract main content
             content_parts = []
             
-            for elem in ai_div.children:
-                if elem.name == 'p':
-                    text = elem.get_text(separator=' ').strip()
-                    if text:
-                        content_parts.append(text)
-                elif elem.name == 'ul':
-                    # Extract list items with bullets
-                    items = []
-                    for li in elem.find_all('li'):
-                        item_text = li.get_text(separator=' ').strip()
-                        if item_text:
-                            # Check if it's a citation (contains http)
-                            if 'http' not in item_text:
-                                items.append(f"  • {item_text}")
-                            else:
-                                items.append(f"  {item_text}")
-                    if items:
-                        content_parts.append('\n'.join(items))
+            # Process all paragraphs and their content
+            for p in ai_div.find_all('p'):
+                # Get text segments between nested ULs
+                parts = []
+                for child in p.children:
+                    if hasattr(child, 'name'):
+                        if child.name == 'ul':
+                            # This UL will be processed separately
+                            continue
+                        elif child.name in ['strong', 'b']:
+                            parts.append(child.get_text())
+                        elif child.name == 'br':
+                            parts.append('\n')
+                    elif hasattr(child, 'strip'):
+                        text = str(child).strip()
+                        if text:
+                            parts.append(text)
+                
+                # Join parts and clean up
+                p_text = ''.join(parts).strip()
+                if p_text:
+                    # Clean up extra whitespace
+                    p_text = ' '.join(p_text.split())
+                    content_parts.append(p_text)
+            
+            # Process content ULs (like "Why other options are not suitable")
+            for ul in content_uls:
+                items = []
+                for li in ul.find_all('li', recursive=False):
+                    item_text = li.get_text(separator=' ').strip()
+                    if item_text:
+                        # Format as bullet point
+                        item_text = ' '.join(item_text.split())  # Clean whitespace
+                        items.append(f"  • {item_text}")
+                if items:
+                    content_parts.append('\n'.join(items))
             
             result['ai_recommendation'] = '\n\n'.join(content_parts)
             
-            # Extract citations separately
-            citations = []
-            citation_uls = ai_div.find_all('ul')
-            if citation_uls:
-                # Last ul is usually citations
-                for li in citation_uls[-1].find_all('li'):
+            # Extract citations
+            if citation_ul:
+                citations = []
+                for li in citation_ul.find_all('li'):
                     citation_text = li.get_text(separator=' ').strip()
+                    citation_text = ' '.join(citation_text.split())  # Clean whitespace
                     if citation_text:
                         citations.append(citation_text)
-            if citations:
-                result['ai_citations'] = citations
+                if citations:
+                    result['ai_citations'] = citations
     
     return result
+
 
 
 def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
