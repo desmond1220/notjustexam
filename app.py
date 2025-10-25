@@ -641,7 +641,7 @@ def study_exam_page():
 
     # Question content
     with st.container():
-        st.markdown('<div class="question-container">', unsafe_allow_html=True)
+        # st.markdown('<div class="question-container">', unsafe_allow_html=True)
 
         st.markdown("### Question")
         st.markdown(question.get('question', 'No question text available'))
@@ -662,7 +662,7 @@ def study_exam_page():
             for letter, choice_text in sorted(question['choices'].items()):
                 st.markdown(f"**{letter}.** {choice_text}")
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        # st.markdown('</div>', unsafe_allow_html=True)
 
     # Show answer section
     st.markdown("---")
