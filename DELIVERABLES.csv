@@ -1,0 +1,14 @@
+File Name,Category,Purpose,Required,Note
+notjustexam_app.py,Core Application,Main Streamlit application with full functionality,Yes,Rename to 'app.py' for deployment
+requirements.txt,Core Application,Python package dependencies,Yes,Needed for Streamlit Cloud deployment
+README.md,Documentation,Complete project documentation,Yes,Primary reference document
+QUICK_START.md,Documentation,10-minute quick setup guide,No,Recommended for beginners
+DEPLOYMENT_GUIDE.md,Documentation,Detailed deployment instructions,No,Step-by-step Streamlit Cloud setup
+PROJECT_STRUCTURE.md,Documentation,Technical documentation and file formats,No,Reference for developers
+PROJECT_SUMMARY.md,Documentation,Complete overview and business guide,No,Includes revenue models and growth roadmap
+.gitignore,Configuration,Git exclusion rules,No,Recommended for GitHub
+.streamlit/config.toml,Configuration,Streamlit app configuration,No,Optional customization
+upload_helper.py,Utility,File preparation and validation script,No,Helps organize question folders
+sample_question_template/summary_question.html,Sample,Example question HTML format,No,Template reference
+sample_question_template/summary_discussion_ai.html,Sample,Example answer HTML format,No,Template reference
+project_info.json,Reference,Project metadata and information,No,JSON format summary

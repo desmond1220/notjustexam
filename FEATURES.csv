@@ -1,0 +1,20 @@
+Feature,Status,Description
+Create Exams,✅ Complete,Create new exams with custom names
+Upload Folders,✅ Complete,Upload multiple question folders at once
+Parse HTML,✅ Complete,Automatic HTML parsing with BeautifulSoup
+Extract Questions,✅ Complete,Parse summary_question.html files
+Extract Answers,✅ Complete,Parse summary_discussion_ai.html files
+Save Exams,✅ Complete,Persist exam data as JSON
+Load Exams,✅ Complete,Load saved exams for study
+Study Portal,✅ Complete,Question display interface
+Show Answers,✅ Complete,Toggle answer visibility
+Navigation,✅ Complete,Previous/Next question navigation
+Images Support,✅ Complete,Display question images
+Discussion Summary,✅ Complete,Show internet discussion summaries
+AI Answers,✅ Complete,Display AI-recommended answers
+Citations,✅ Complete,Show references and sources
+Delete Exams,✅ Complete,Remove exams from system
+Progress Tracking,✅ Complete,Show progress through exam
+Responsive Design,✅ Complete,Mobile-friendly interface
+Custom Styling,✅ Complete,Professional CSS design
+Session Management,✅ Complete,Maintain state across pages
