@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 # Page configuration
 st.set_page_config(
     page_title="NotJustExam Study Portal",
-    page_icon="📚",
+    page_icon="ðŸ“š",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -262,13 +262,13 @@ def delete_exam(exam_name: str):
 
 def home_page():
     """Display home page with exam list"""
-    st.markdown('<h1 class="main-header">📚 NotJustExam Study Portal</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">ðŸ“š NotJustExam Study Portal</h1>', unsafe_allow_html=True)
     st.markdown("### Your comprehensive exam preparation platform")
 
     # Create new exam button
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
-        if st.button("➕ Create New Exam", use_container_width=True):
+        if st.button("âž• Create New Exam", use_container_width=True):
             st.session_state.current_page = "create_exam"
             st.rerun()
 
@@ -278,9 +278,9 @@ def home_page():
     exams = list_exams()
 
     if not exams:
-        st.info("📝 No exams found. Create your first exam to get started!")
+        st.info("ðŸ“ No exams found. Create your first exam to get started!")
     else:
-        st.subheader(f"📖 Your Exams ({len(exams)})")
+        st.subheader(f"ðŸ“– Your Exams ({len(exams)})")
 
         for exam_name in exams:
             exam_data = load_exam(exam_name)
@@ -289,11 +289,11 @@ def home_page():
                     col1, col2, col3 = st.columns([3, 1, 1])
 
                     with col1:
-                        st.markdown(f"### 📚 {exam_name}")
+                        st.markdown(f"### ðŸ“š {exam_name}")
                         st.caption(f"{exam_data['question_count']} questions | Created: {exam_data.get('created_at', 'N/A')[:10]}")
 
                     with col2:
-                        if st.button("📖 Study", key=f"study_{exam_name}", use_container_width=True):
+                        if st.button("ðŸ“– Study", key=f"study_{exam_name}", use_container_width=True):
                             st.session_state.selected_exam = exam_name
                             st.session_state.current_page = "study_exam"
                             st.session_state.current_question_index = 0
@@ -301,7 +301,7 @@ def home_page():
                             st.rerun()
 
                     with col3:
-                        if st.button("🗑️ Delete", key=f"delete_{exam_name}", use_container_width=True):
+                        if st.button("ðŸ—‘ï¸ Delete", key=f"delete_{exam_name}", use_container_width=True):
                             if delete_exam(exam_name):
                                 st.success(f"Deleted exam: {exam_name}")
                                 st.rerun()
@@ -312,9 +312,9 @@ def home_page():
 
 def create_exam_page():
     """Page for creating a new exam"""
-    st.title("➕ Create New Exam")
+    st.title("âž• Create New Exam")
 
-    if st.button("⬅️ Back to Home"):
+    if st.button("â¬…ï¸ Back to Home"):
         st.session_state.current_page = "home"
         st.rerun()
 
@@ -322,7 +322,7 @@ def create_exam_page():
 
     # Instructions
     st.markdown("""
-    ### 📋 Instructions
+    ### ðŸ“‹ Instructions
     1. Enter a unique name for your exam
     2. Upload folders containing exam questions
     3. Each folder should have the format: `topic_<topic_index>_question_<question_index>`
@@ -343,7 +343,7 @@ def create_exam_page():
 
     # Check if exam already exists
     if exam_name and exam_name in list_exams():
-        st.warning(f"⚠️ Exam '{exam_name}' already exists. Creating it will replace the existing exam.")
+        st.warning(f"âš ï¸ Exam '{exam_name}' already exists. Creating it will replace the existing exam.")
 
     # File uploader - supports multiple files
     st.markdown("### Upload Question Folders")
@@ -355,10 +355,10 @@ def create_exam_page():
     )
 
     if uploaded_files:
-        st.success(f"✅ {len(uploaded_files)} files uploaded")
+        st.success(f"âœ… {len(uploaded_files)} files uploaded")
 
         # Preview uploaded files structure
-        with st.expander("📂 View uploaded files structure"):
+        with st.expander("ðŸ“‚ View uploaded files structure"):
             folders_preview = {}
             for f in uploaded_files:
                 parts = f.name.split('/')
@@ -375,7 +375,7 @@ def create_exam_page():
 
     # Parse and save button
     st.markdown("---")
-    if st.button("🔄 Parse and Save Exam", type="primary", disabled=not exam_name or not uploaded_files):
+    if st.button("ðŸ”„ Parse and Save Exam", type="primary", disabled=not exam_name or not uploaded_files):
         if exam_name and uploaded_files:
             with st.spinner("Processing uploaded files... Please wait."):
                 try:
@@ -386,7 +386,7 @@ def create_exam_page():
                         # Save exam
                         save_exam(exam_name, questions)
 
-                        st.success(f"✅ Successfully created exam: {exam_name}")
+                        st.success(f"âœ… Successfully created exam: {exam_name}")
                         st.balloons()
 
                         # Show summary
@@ -400,12 +400,12 @@ def create_exam_page():
                             images = sum(len(q.get('saved_images', [])) for q in questions)
                             st.metric("Images", images)
 
-                        st.info("👉 Go back to home to start studying!")
+                        st.info("ðŸ‘‰ Go back to home to start studying!")
                     else:
-                        st.error("❌ No valid questions found in uploaded files. Please check the folder structure and file naming.")
+                        st.error("âŒ No valid questions found in uploaded files. Please check the folder structure and file naming.")
 
                 except Exception as e:
-                    st.error(f"❌ Error processing files: {str(e)}")
+                    st.error(f"âŒ Error processing files: {str(e)}")
                     import traceback
                     with st.expander("View error details"):
                         st.code(traceback.format_exc())
@@ -417,7 +417,7 @@ def study_exam_page():
 
     if not exam_data:
         st.error("Exam not found")
-        if st.button("⬅️ Back to Home"):
+        if st.button("â¬…ï¸ Back to Home"):
             st.session_state.current_page = "home"
             st.rerun()
         return
@@ -428,9 +428,9 @@ def study_exam_page():
     # Header
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.title(f"📖 {exam_name}")
+        st.title(f"ðŸ“– {exam_name}")
     with col2:
-        if st.button("🏠 Exit to Home"):
+        if st.button("ðŸ  Exit to Home"):
             st.session_state.current_page = "home"
             st.rerun()
 
@@ -455,7 +455,7 @@ def study_exam_page():
 
         # Display images if available
         if 'saved_images' in question and question['saved_images']:
-            st.markdown("### 📷 Images")
+            st.markdown("### ðŸ“· Images")
             img_cols = st.columns(min(len(question['saved_images']), 3))
             for idx, img_file in enumerate(question['saved_images']):
                 img_path = DATA_DIR / exam_name / "images" / img_file
@@ -481,11 +481,11 @@ def study_exam_page():
 
     with col1:
         if not st.session_state.show_answer[question_id]:
-            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
+            if st.button("ðŸ’¡ Show Answer", key=f"show_{question_id}", use_container_width=True):
                 st.session_state.show_answer[question_id] = True
                 st.rerun()
         else:
-            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
+            if st.button("ðŸ”’ Hide Answer", key=f"hide_{question_id}", use_container_width=True):
                 st.session_state.show_answer[question_id] = False
                 st.rerun()
 
@@ -496,7 +496,7 @@ def study_exam_page():
         # Suggested Answer
         if 'suggested_answer' in question or 'correct_answer' in question:
             st.markdown('<div class="suggested-answer">', unsafe_allow_html=True)
-            st.markdown("### ✅ Suggested Answer")
+            st.markdown("### âœ… Suggested Answer")
             answer = question.get('suggested_answer') or question.get('correct_answer')
             st.markdown(f"**Answer: {answer}**")
             if answer in question.get('choices', {}):
@@ -506,14 +506,14 @@ def study_exam_page():
         # Discussion Summary
         if 'discussion_summary' in question:
             st.markdown('<div class="discussion-summary">', unsafe_allow_html=True)
-            st.markdown("### 💬 Internet Discussion Summary")
+            st.markdown("### ðŸ’¬ Internet Discussion Summary")
             st.markdown(question['discussion_summary'])
             st.markdown('</div>', unsafe_allow_html=True)
 
         # AI Recommendation
         if 'ai_recommendation' in question:
             st.markdown('<div class="ai-recommendation">', unsafe_allow_html=True)
-            st.markdown("### 🤖 AI Recommended Answer")
+            st.markdown("### ðŸ¤– AI Recommended Answer")
             st.markdown(question['ai_recommendation'])
 
             # Citations
@@ -531,18 +531,18 @@ def study_exam_page():
 
     with col1:
         if current_idx > 0:
-            if st.button("⬅️ Previous", use_container_width=True):
+            if st.button("â¬…ï¸ Previous", use_container_width=True):
                 st.session_state.current_question_index -= 1
                 st.rerun()
 
     with col3:
         if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", use_container_width=True):
+            if st.button("Next âž¡ï¸", use_container_width=True):
                 st.session_state.current_question_index += 1
                 st.rerun()
         else:
-            if st.button("🎉 Finish", use_container_width=True, type="primary"):
-                st.success("🎉 Congratulations! You've completed all questions!")
+            if st.button("ðŸŽ‰ Finish", use_container_width=True, type="primary"):
+                st.success("ðŸŽ‰ Congratulations! You've completed all questions!")
                 st.balloons()
 
 # ============= MAIN APPLICATION =============
@@ -553,13 +553,13 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.markdown("# 🎓 NotJustExam")
+        st.markdown("# ðŸŽ“ NotJustExam")
         st.markdown("### Premium Exam Dumps & Study Materials")
         st.markdown("---")
 
         # Navigation
         if st.session_state.current_page != "home":
-            if st.button("🏠 Home", use_container_width=True):
+            if st.button("ðŸ  Home", use_container_width=True):
                 st.session_state.current_page = "home"
                 st.rerun()
 
@@ -577,10 +577,10 @@ def main():
         st.markdown("### About")
         st.markdown("""
         NotJustExam provides comprehensive exam preparation materials featuring:
-        - ✅ Verified exam questions
-        - 💬 Community discussions
-        - 🤖 AI-powered explanations
-        - 📚 Detailed references
+        - âœ… Verified exam questions
+        - ðŸ’¬ Community discussions
+        - ðŸ¤– AI-powered explanations
+        - ðŸ“š Detailed references
         """)
 
     # Route to appropriate page

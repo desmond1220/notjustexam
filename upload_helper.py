@@ -27,11 +27,11 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
                            if d.is_dir() and d.name.startswith('topic_')])
 
     if not topic_folders:
-        print("❌ No topic folders found!")
+        print("âŒ No topic folders found!")
         print(f"   Looking for folders starting with 'topic_' in: {source_dir}")
         return
 
-    print(f"📂 Found {len(topic_folders)} topic folders")
+    print(f"ðŸ“‚ Found {len(topic_folders)} topic folders")
     print()
 
     total_questions = 0
@@ -51,9 +51,9 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
             source_file = folder / html_file
             if source_file.exists():
                 shutil.copy2(source_file, output_folder / html_file)
-                print(f"  ✓ Copied {html_file}")
+                print(f"  âœ“ Copied {html_file}")
             else:
-                print(f"  ⚠ Missing {html_file}")
+                print(f"  âš  Missing {html_file}")
 
         # Copy image files
         image_files = list(folder.glob('image_*.png')) + list(folder.glob('image_*.jpg'))
@@ -62,19 +62,19 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
             total_images += 1
 
         if image_files:
-            print(f"  ✓ Copied {len(image_files)} image(s)")
+            print(f"  âœ“ Copied {len(image_files)} image(s)")
 
         total_questions += 1
         print()
 
     print("=" * 50)
-    print("✅ Package created successfully!")
-    print(f"📊 Summary:")
+    print("âœ… Package created successfully!")
+    print(f"ðŸ“Š Summary:")
     print(f"   - Total questions: {total_questions}")
     print(f"   - Total images: {total_images}")
     print(f"   - Output directory: {output_path.absolute()}")
     print()
-    print("📦 Next steps:")
+    print("ðŸ“¦ Next steps:")
     print("   1. Go to your NotJustExam app")
     print("   2. Click 'Create New Exam'")
     print("   3. Enter an exam name")
@@ -90,7 +90,7 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
                 if folder.is_file():
                     arcname = folder.relative_to(output_path.parent)
                     zipf.write(folder, arcname)
-        print(f"✅ Created ZIP file: {zip_name}")
+        print(f"âœ… Created ZIP file: {zip_name}")
 
 def validate_folder_structure(folder_path: str):
     """Validate a single topic folder structure"""
@@ -113,29 +113,29 @@ def validate_folder_structure(folder_path: str):
         if not file_path.exists():
             errors.append(f"Missing required file: {req_file}")
         else:
-            print(f"✓ Found: {req_file}")
+            print(f"âœ“ Found: {req_file}")
 
     # Check for images
     image_files = list(folder.glob('image_*.*'))
     if image_files:
-        print(f"✓ Found {len(image_files)} image(s)")
+        print(f"âœ“ Found {len(image_files)} image(s)")
     else:
         warnings.append("No images found (optional)")
 
     # Report results
     print()
     if errors:
-        print("❌ ERRORS:")
+        print("âŒ ERRORS:")
         for error in errors:
             print(f"   - {error}")
 
     if warnings:
-        print("⚠️  WARNINGS:")
+        print("âš ï¸  WARNINGS:")
         for warning in warnings:
             print(f"   - {warning}")
 
     if not errors:
-        print("✅ Folder structure is valid!")
+        print("âœ… Folder structure is valid!")
 
     print()
     return len(errors) == 0
@@ -161,14 +161,14 @@ if __name__ == "__main__":
                 output = "upload_package"
             create_upload_package(source, output)
         else:
-            print(f"❌ Directory not found: {source}")
+            print(f"âŒ Directory not found: {source}")
 
     elif choice == "2":
         folder = input("Enter folder path to validate: ").strip()
         if os.path.exists(folder):
             validate_folder_structure(folder)
         else:
-            print(f"❌ Folder not found: {folder}")
+            print(f"âŒ Folder not found: {folder}")
 
     else:
-        print("❌ Invalid choice")
+        print("âŒ Invalid choice")
