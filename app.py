@@ -16,6 +16,21 @@ import re
 from datetime import datetime
 from bs4 import BeautifulSoup
 import io
+import hashlib
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(input_password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash"""
+    return hash_password(input_password) == stored_hash
+
+def is_exam_authenticated(exam_name: str) -> bool:
+    """Check if exam is authenticated in current session"""
+    if "authenticated_exams" not in st.session_state:
+        st.session_state.authenticated_exams = []
+    return exam_name in st.session_state.authenticated_exams
 
 # Page configuration
 st.set_page_config(
@@ -58,6 +73,11 @@ def initialize_session_state():
         st.session_state.current_question_index = 0
     if "show_answer" not in st.session_state:
         st.session_state.show_answer = {}
+    if "authenticated_exams" not in st.session_state:  # NEW
+        st.session_state.authenticated_exams = []
+    if "password_attempt" not in st.session_state:  # NEW
+        st.session_state.password_attempt = {}
+
 
 def parse_folder_name(folder_name: str) -> Dict[str, int]:
     """Extract topic and question index from folder name"""
@@ -336,19 +356,28 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
 
     return questions
 
-def save_exam(exam_name: str, questions: List[Dict[str, Any]]):
-    """Save exam data to JSON file"""
+def save_exam(exam_name: str, questions: List[Dict[str, Any]], password: str = None):
+    """Save exam data to JSON file with optional password"""
     exam_dir = DATA_DIR / exam_name
     exam_dir.mkdir(parents=True, exist_ok=True)
 
+    exam_data = {
+        'exam_name': exam_name,
+        'created_at': datetime.now().isoformat(),
+        'question_count': len(questions),
+        'questions': questions
+    }
+
+    # Add password protection if provided
+    if password:
+        exam_data['password_protected'] = True
+        exam_data['password_hash'] = hash_password(password)
+    else:
+        exam_data['password_protected'] = False
+
     exam_file = exam_dir / "exam_data.json"
     with open(exam_file, 'w', encoding='utf-8') as f:
-        json.dump({
-            'exam_name': exam_name,
-            'created_at': datetime.now().isoformat(),
-            'question_count': len(questions),
-            'questions': questions
-        }, f, indent=2, ensure_ascii=False)
+        json.dump(exam_data, f, indent=2, ensure_ascii=False)
 
 def load_exam(exam_name: str) -> Dict[str, Any]:
     """Load exam data from JSON file"""
@@ -371,6 +400,57 @@ def delete_exam(exam_name: str):
         shutil.rmtree(exam_dir)
         return True
     return False
+
+def unlock_exam_dialog(exam_name: str):
+    """Show password dialog to unlock exam"""
+    exam_data = load_exam(exam_name)
+
+    if not exam_data or not exam_data.get('password_protected'):
+        del st.session_state.exam_to_unlock
+        return
+
+    st.markdown("---")
+    st.markdown(f"### 🔐 Unlock Exam: {exam_name}")
+
+    with st.form(key=f"unlock_form_{exam_name}"):
+        password = st.text_input(
+            "Enter Password",
+            type="password",
+            help="Enter the password to access this exam"
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            submit = st.form_submit_button("🔓 Unlock", use_container_width=True)
+        with col2:
+            cancel = st.form_submit_button("❌ Cancel", use_container_width=True)
+
+        if cancel:
+            del st.session_state.exam_to_unlock
+            st.rerun()
+
+        if submit:
+            if password:
+                stored_hash = exam_data.get('password_hash')
+                if verify_password(password, stored_hash):
+                    # Add to authenticated exams
+                    if exam_name not in st.session_state.authenticated_exams:
+                        st.session_state.authenticated_exams.append(exam_name)
+
+                    st.success("✅ Exam unlocked successfully!")
+                    del st.session_state.exam_to_unlock
+
+                    # Redirect to study
+                    st.session_state.selected_exam = exam_name
+                    st.session_state.current_page = "study_exam"
+                    st.session_state.current_question_index = 0
+                    st.session_state.show_answer = {}
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password. Please try again.")
+            else:
+                st.warning("⚠️ Please enter a password")
+
 
 # ============= PAGE FUNCTIONS =============
 
@@ -399,30 +479,51 @@ def home_page():
         for exam_name in exams:
             exam_data = load_exam(exam_name)
             if exam_data:
+                is_protected = exam_data.get('password_protected', False)
+                is_authenticated = is_exam_authenticated(exam_name)
+
                 with st.container():
                     col1, col2, col3 = st.columns([3, 1, 1])
 
                     with col1:
-                        st.markdown(f"### 📚 {exam_name}")
+                        # Show lock icon if protected
+                        icon = "🔒" if is_protected and not is_authenticated else "📚"
+                        st.markdown(f"### {icon} {exam_name}")
                         st.caption(f"{exam_data['question_count']} questions | Created: {exam_data.get('created_at', 'N/A')[:10]}")
+                        if is_protected and is_authenticated:
+                            st.caption("✅ Unlocked")
 
                     with col2:
-                        if st.button("📖 Study", key=f"study_{exam_name}", use_container_width=True):
-                            st.session_state.selected_exam = exam_name
-                            st.session_state.current_page = "study_exam"
-                            st.session_state.current_question_index = 0
-                            st.session_state.show_answer = {}
-                            st.rerun()
+                        # Show Unlock or Study button
+                        if is_protected and not is_authenticated:
+                            if st.button("🔓 Unlock", key=f"unlock_{exam_name}", use_container_width=True):
+                                st.session_state.exam_to_unlock = exam_name
+                                st.rerun()
+                        else:
+                            if st.button("📖 Study", key=f"study_{exam_name}", use_container_width=True):
+                                st.session_state.selected_exam = exam_name
+                                st.session_state.current_page = "study_exam"
+                                st.session_state.current_question_index = 0
+                                st.session_state.show_answer = {}
+                                st.rerun()
 
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_{exam_name}", use_container_width=True):
                             if delete_exam(exam_name):
+                                # Remove from authenticated list if present
+                                if exam_name in st.session_state.get('authenticated_exams', []):
+                                    st.session_state.authenticated_exams.remove(exam_name)
                                 st.success(f"Deleted exam: {exam_name}")
                                 st.rerun()
                             else:
                                 st.error("Failed to delete exam")
 
                     st.markdown("---")
+
+        # Password unlock dialog
+        if "exam_to_unlock" in st.session_state and st.session_state.exam_to_unlock:
+            unlock_exam_dialog(st.session_state.exam_to_unlock)
+
 
 def create_exam_page():
     """Page for creating a new exam"""
@@ -490,6 +591,45 @@ def create_exam_page():
             └── ...
         ```
         """)
+
+        # Password protection section
+        st.markdown("---")
+        st.markdown("### 🔒 Password Protection (Optional)")
+
+        enable_password = st.checkbox(
+            "Password protect this exam",
+            help="Require a password to access this exam content"
+        )
+
+        exam_password = None
+        exam_password_confirm = None
+
+        if enable_password:
+            col1, col2 = st.columns(2)
+            with col1:
+                exam_password = st.text_input(
+                    "Set Password",
+                    type="password",
+                    help="Minimum 4 characters",
+                    key="exam_password"
+                )
+            with col2:
+                exam_password_confirm = st.text_input(
+                    "Confirm Password",
+                    type="password",
+                    key="exam_password_confirm"
+                )
+
+            # Validate passwords
+            if exam_password and exam_password_confirm:
+                if exam_password != exam_password_confirm:
+                    st.error("❌ Passwords do not match!")
+                elif len(exam_password) < 4:
+                    st.warning("⚠️ Password should be at least 4 characters")
+                else:
+                    st.success("✅ Password set successfully")
+
+        st.markdown("---")
 
         uploaded_zip = st.file_uploader(
             "Upload ZIP file containing all question folders",
@@ -565,6 +705,18 @@ def create_exam_page():
 
     if st.button("🔄 Parse and Save Exam", type="primary", disabled=not can_process):
         if exam_name:
+            # Validate password if enabled
+            if enable_password:
+                if not exam_password or not exam_password_confirm:
+                    st.error("❌ Please enter and confirm password")
+                    st.stop()
+                elif exam_password != exam_password_confirm:
+                    st.error("❌ Passwords do not match!")
+                    st.stop()
+                elif len(exam_password) < 4:
+                    st.error("❌ Password must be at least 4 characters")
+                    st.stop()
+
             with st.spinner("Processing uploaded files... Please wait."):
                 try:
                     questions = []
@@ -576,10 +728,13 @@ def create_exam_page():
                         questions = process_uploaded_folders(uploaded_files, exam_name)
 
                     if questions:
-                        # Save exam
-                        save_exam(exam_name, questions)
+                        # Save exam with password if provided
+                        password_to_save = exam_password if enable_password else None
+                        save_exam(exam_name, questions, password=password_to_save)
 
                         st.success(f"✅ Successfully created exam: {exam_name}")
+                        if enable_password:
+                            st.info("🔒 This exam is password protected")
                         st.balloons()
 
                         # Show summary
@@ -595,13 +750,11 @@ def create_exam_page():
 
                         st.info("👉 Go back to home to start studying!")
                     else:
-                        st.error("❌ No valid questions found in uploaded files. Please check the folder structure and file naming.")
+                        st.error("❌ No valid questions found")
 
                 except Exception as e:
                     st.error(f"❌ Error processing files: {str(e)}")
-                    import traceback
-                    with st.expander("View error details"):
-                        st.code(traceback.format_exc())
+
 
 def study_exam_page():
     """Page for studying an exam"""
@@ -615,6 +768,16 @@ def study_exam_page():
             st.rerun()
         return
 
+    # Check if exam is password protected and not authenticated
+    if exam_data.get('password_protected', False) and not is_exam_authenticated(exam_name):
+        st.warning("🔒 This exam is password protected")
+        st.info("Please unlock the exam from the home page first")
+        if st.button("⬅️ Back to Home"):
+            st.session_state.current_page = "home"
+            st.rerun()
+        return
+
+    # Continue with normal study page logic...
     questions = exam_data['questions']
     current_idx = st.session_state.current_question_index
 
