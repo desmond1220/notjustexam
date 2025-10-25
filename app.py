@@ -75,6 +75,10 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
     soup = BeautifulSoup(html_content, 'html.parser')
     result = {}
     
+    # Remove all elements with display:none style before processing
+    for elem in soup.find_all(style=lambda value: value and 'display: none' in value.lower()):
+        elem.decompose()
+    
     if content_type == 'question':
         # Extract question text with proper formatting
         question_div = soup.find('div', class_='question')
@@ -116,7 +120,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             # Remove the header if present
             header = discussion_div.find('h3')
             if header:
-                header.extract()
+                header.decompose()
             
             # Get formatted text with paragraphs preserved
             discussion_text = discussion_div.get_text(separator='\n\n').strip()
@@ -128,7 +132,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             # Remove the header if present
             header = ai_div.find('h3')
             if header:
-                header.extract()
+                header.decompose()
             
             # Extract main content preserving structure
             content_parts = []
