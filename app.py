@@ -1,6 +1,7 @@
 """
 NotJustExam - Exam Study Portal
 A Streamlit application for managing and studying exam dumps
+Enhanced with ZIP file upload support
 """
 
 import streamlit as st
@@ -14,16 +15,17 @@ from typing import Dict, List, Any
 import re
 from datetime import datetime
 from bs4 import BeautifulSoup
+import io
 
 # Page configuration
 st.set_page_config(
     page_title="NotJustExam Study Portal",
-    page_icon="ðŸ“š",
+    page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS (keeping minimal for brevity)
 st.markdown("""
 <style>
     .main-header {
@@ -32,43 +34,12 @@ st.markdown("""
         text-align: center;
         margin-bottom: 20px;
     }
-    .exam-card {
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid #ddd;
-        margin: 10px 0;
-        background-color: #f9f9f9;
-    }
     .question-container {
         padding: 20px;
         border: 2px solid #1f77b4;
         border-radius: 10px;
         margin: 20px 0;
         background-color: white;
-    }
-    .answer-section {
-        background-color: #e8f4f8;
-        padding: 15px;
-        border-radius: 8px;
-        margin-top: 15px;
-    }
-    .suggested-answer {
-        background-color: #d4edda;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 4px solid #28a745;
-    }
-    .discussion-summary {
-        background-color: #fff3cd;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 4px solid #ffc107;
-    }
-    .ai-recommendation {
-        background-color: #d1ecf1;
-        padding: 10px;
-        border-radius: 5px;
-        border-left: 4px solid #17a2b8;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -155,6 +126,35 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
 
     return result
 
+def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
+    """
+    Extract ZIP file contents and organize by folder structure
+
+    Returns:
+        Dict mapping folder names to files (name -> content bytes)
+    """
+    folders = {}
+
+    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+        for file_info in zip_ref.filelist:
+            # Skip directories and hidden files
+            if file_info.is_dir() or file_info.filename.startswith('__MACOSX'):
+                continue
+
+            # Extract folder and file name
+            parts = Path(file_info.filename).parts
+            if len(parts) >= 2:
+                folder_name = parts[0]
+                file_basename = parts[-1]
+
+                if folder_name not in folders:
+                    folders[folder_name] = {}
+
+                # Read file content
+                folders[folder_name][file_basename] = zip_ref.read(file_info.filename)
+
+    return folders
+
 def process_uploaded_folders(uploaded_files: List, exam_name: str) -> List[Dict[str, Any]]:
     """Process uploaded folders and extract question data"""
     questions = []
@@ -210,8 +210,64 @@ def process_uploaded_folders(uploaded_files: List, exam_name: str) -> List[Dict[
                 saved_images = []
                 for img_file in image_files:
                     img_path = exam_images_dir / f"{folder_name}_{img_file}"
+                    content = files[img_file].read() if hasattr(files[img_file], 'read') else files[img_file]
                     with open(img_path, 'wb') as f:
-                        f.write(files[img_file].read())
+                        f.write(content)
+                    saved_images.append(f"{folder_name}_{img_file}")
+                question_data['saved_images'] = saved_images
+
+            questions.append(question_data)
+
+    # Sort questions by topic and question index
+    questions.sort(key=lambda x: (x['topic_index'], x['question_index']))
+
+    return questions
+
+def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
+    """Process uploaded ZIP file and extract question data"""
+    questions = []
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        # Extract ZIP contents
+        folders = extract_zip_file(zip_file, temp_path)
+
+        # Process each folder
+        for folder_name, files in folders.items():
+            folder_info = parse_folder_name(folder_name)
+            if not folder_info:
+                continue
+
+            question_data = {
+                'topic_index': folder_info['topic_index'],
+                'question_index': folder_info['question_index'],
+                'question_name': f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
+            }
+
+            # Process summary_question.html
+            if 'summary_question.html' in files:
+                content = files['summary_question.html'].decode('utf-8')
+                question_content = extract_html_content(content, 'question')
+                question_data.update(question_content)
+
+            # Process summary_discussion_ai.html
+            if 'summary_discussion_ai.html' in files:
+                content = files['summary_discussion_ai.html'].decode('utf-8')
+                answer_content = extract_html_content(content, 'answer')
+                question_data.update(answer_content)
+
+            # Save images
+            image_files = [f for f in files.keys() if f.startswith('image_') and f.endswith(('.png', '.jpg', '.jpeg'))]
+            if image_files:
+                exam_images_dir = DATA_DIR / exam_name / "images"
+                exam_images_dir.mkdir(parents=True, exist_ok=True)
+
+                saved_images = []
+                for img_file in image_files:
+                    img_path = exam_images_dir / f"{folder_name}_{img_file}"
+                    with open(img_path, 'wb') as f:
+                        f.write(files[img_file])
                     saved_images.append(f"{folder_name}_{img_file}")
                 question_data['saved_images'] = saved_images
 
@@ -262,13 +318,13 @@ def delete_exam(exam_name: str):
 
 def home_page():
     """Display home page with exam list"""
-    st.markdown('<h1 class="main-header">ðŸ“š NotJustExam Study Portal</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">📚 NotJustExam Study Portal</h1>', unsafe_allow_html=True)
     st.markdown("### Your comprehensive exam preparation platform")
 
     # Create new exam button
     col1, col2, col3 = st.columns([1, 1, 2])
     with col1:
-        if st.button("âž• Create New Exam", use_container_width=True):
+        if st.button("➕ Create New Exam", use_container_width=True):
             st.session_state.current_page = "create_exam"
             st.rerun()
 
@@ -278,9 +334,9 @@ def home_page():
     exams = list_exams()
 
     if not exams:
-        st.info("ðŸ“ No exams found. Create your first exam to get started!")
+        st.info("📝 No exams found. Create your first exam to get started!")
     else:
-        st.subheader(f"ðŸ“– Your Exams ({len(exams)})")
+        st.subheader(f"📖 Your Exams ({len(exams)})")
 
         for exam_name in exams:
             exam_data = load_exam(exam_name)
@@ -289,11 +345,11 @@ def home_page():
                     col1, col2, col3 = st.columns([3, 1, 1])
 
                     with col1:
-                        st.markdown(f"### ðŸ“š {exam_name}")
+                        st.markdown(f"### 📚 {exam_name}")
                         st.caption(f"{exam_data['question_count']} questions | Created: {exam_data.get('created_at', 'N/A')[:10]}")
 
                     with col2:
-                        if st.button("ðŸ“– Study", key=f"study_{exam_name}", use_container_width=True):
+                        if st.button("📖 Study", key=f"study_{exam_name}", use_container_width=True):
                             st.session_state.selected_exam = exam_name
                             st.session_state.current_page = "study_exam"
                             st.session_state.current_question_index = 0
@@ -301,7 +357,7 @@ def home_page():
                             st.rerun()
 
                     with col3:
-                        if st.button("ðŸ—‘ï¸ Delete", key=f"delete_{exam_name}", use_container_width=True):
+                        if st.button("🗑️ Delete", key=f"delete_{exam_name}", use_container_width=True):
                             if delete_exam(exam_name):
                                 st.success(f"Deleted exam: {exam_name}")
                                 st.rerun()
@@ -312,9 +368,9 @@ def home_page():
 
 def create_exam_page():
     """Page for creating a new exam"""
-    st.title("âž• Create New Exam")
+    st.title("➕ Create New Exam")
 
-    if st.button("â¬…ï¸ Back to Home"):
+    if st.button("⬅️ Back to Home"):
         st.session_state.current_page = "home"
         st.rerun()
 
@@ -322,9 +378,9 @@ def create_exam_page():
 
     # Instructions
     st.markdown("""
-    ### ðŸ“‹ Instructions
+    ### 📋 Instructions
     1. Enter a unique name for your exam
-    2. Upload folders containing exam questions
+    2. **Choose upload method:** ZIP file (recommended) or individual files
     3. Each folder should have the format: `topic_<topic_index>_question_<question_index>`
     4. Each folder must contain:
         - `summary_question.html` - The question content
@@ -343,50 +399,129 @@ def create_exam_page():
 
     # Check if exam already exists
     if exam_name and exam_name in list_exams():
-        st.warning(f"âš ï¸ Exam '{exam_name}' already exists. Creating it will replace the existing exam.")
+        st.warning(f"⚠️ Exam '{exam_name}' already exists. Creating it will replace the existing exam.")
 
-    # File uploader - supports multiple files
-    st.markdown("### Upload Question Folders")
-    uploaded_files = st.file_uploader(
-        "Upload all files from your question folders",
-        type=['html', 'png', 'jpg', 'jpeg'],
-        accept_multiple_files=True,
-        help="Select all HTML and image files from your question folders. Make sure files maintain their folder structure in the filename (e.g., topic_1_question_1/summary_question.html)"
+    st.markdown("### Choose Upload Method")
+
+    # Upload method selector
+    upload_method = st.radio(
+        "Select how you want to upload your content:",
+        ["📦 Upload ZIP File (Recommended)", "📁 Upload Individual Files"],
+        horizontal=True
     )
 
-    if uploaded_files:
-        st.success(f"âœ… {len(uploaded_files)} files uploaded")
+    uploaded_zip = None
+    uploaded_files = None
 
-        # Preview uploaded files structure
-        with st.expander("ðŸ“‚ View uploaded files structure"):
-            folders_preview = {}
-            for f in uploaded_files:
-                parts = f.name.split('/')
-                if len(parts) >= 2:
-                    folder = parts[0]
-                    if folder not in folders_preview:
-                        folders_preview[folder] = []
-                    folders_preview[folder].append(parts[-1])
+    if upload_method == "📦 Upload ZIP File (Recommended)":
+        st.markdown("""
+        #### 📦 ZIP File Upload
+        Upload a single ZIP file containing all your question folders.
 
-            for folder, files in folders_preview.items():
-                st.write(f"**{folder}/**")
-                for file in files:
-                    st.write(f"  - {file}")
+        **ZIP Structure Example:**
+        ```
+        exam_content.zip
+        ├── topic_1_question_1/
+        │   ├── summary_question.html
+        │   ├── summary_discussion_ai.html
+        │   └── image_0.png
+        ├── topic_1_question_2/
+        │   ├── summary_question.html
+        │   └── summary_discussion_ai.html
+        └── topic_2_question_1/
+            └── ...
+        ```
+        """)
+
+        uploaded_zip = st.file_uploader(
+            "Upload ZIP file containing all question folders",
+            type=['zip'],
+            help="Upload a ZIP file with all your exam content"
+        )
+
+        if uploaded_zip:
+            st.success(f"✅ ZIP file uploaded: {uploaded_zip.name} ({uploaded_zip.size / 1024:.1f} KB)")
+
+            # Preview ZIP contents
+            with st.expander("📂 View ZIP contents"):
+                try:
+                    with zipfile.ZipFile(uploaded_zip, 'r') as zip_ref:
+                        file_list = zip_ref.namelist()
+                        folders_preview = {}
+
+                        for file_path in file_list:
+                            if not file_path.endswith('/') and not '__MACOSX' in file_path:
+                                parts = Path(file_path).parts
+                                if len(parts) >= 2:
+                                    folder = parts[0]
+                                    if folder not in folders_preview:
+                                        folders_preview[folder] = []
+                                    folders_preview[folder].append(parts[-1])
+
+                        for folder, files in folders_preview.items():
+                            st.write(f"**{folder}/**")
+                            for file in files:
+                                st.write(f"  - {file}")
+
+                    # Reset file pointer
+                    uploaded_zip.seek(0)
+                except Exception as e:
+                    st.error(f"Error reading ZIP file: {str(e)}")
+
+    else:  # Individual files upload
+        st.markdown("""
+        #### 📁 Individual Files Upload
+        Select all HTML and image files from your question folders.
+        Make sure files maintain their folder structure in the filename.
+        """)
+
+        uploaded_files = st.file_uploader(
+            "Upload all files from your question folders",
+            type=['html', 'png', 'jpg', 'jpeg'],
+            accept_multiple_files=True,
+            help="Select all HTML and image files. File paths should include folder names (e.g., topic_1_question_1/summary_question.html)"
+        )
+
+        if uploaded_files:
+            st.success(f"✅ {len(uploaded_files)} files uploaded")
+
+            # Preview uploaded files structure
+            with st.expander("📂 View uploaded files structure"):
+                folders_preview = {}
+                for f in uploaded_files:
+                    parts = f.name.split('/')
+                    if len(parts) >= 2:
+                        folder = parts[0]
+                        if folder not in folders_preview:
+                            folders_preview[folder] = []
+                        folders_preview[folder].append(parts[-1])
+
+                for folder, files in folders_preview.items():
+                    st.write(f"**{folder}/**")
+                    for file in files:
+                        st.write(f"  - {file}")
 
     # Parse and save button
     st.markdown("---")
-    if st.button("ðŸ”„ Parse and Save Exam", type="primary", disabled=not exam_name or not uploaded_files):
-        if exam_name and uploaded_files:
+    can_process = exam_name and (uploaded_zip is not None or (uploaded_files is not None and len(uploaded_files) > 0))
+
+    if st.button("🔄 Parse and Save Exam", type="primary", disabled=not can_process):
+        if exam_name:
             with st.spinner("Processing uploaded files... Please wait."):
                 try:
-                    # Process folders
-                    questions = process_uploaded_folders(uploaded_files, exam_name)
+                    questions = []
+
+                    # Process based on upload method
+                    if uploaded_zip:
+                        questions = process_zip_file(uploaded_zip, exam_name)
+                    elif uploaded_files:
+                        questions = process_uploaded_folders(uploaded_files, exam_name)
 
                     if questions:
                         # Save exam
                         save_exam(exam_name, questions)
 
-                        st.success(f"âœ… Successfully created exam: {exam_name}")
+                        st.success(f"✅ Successfully created exam: {exam_name}")
                         st.balloons()
 
                         # Show summary
@@ -400,12 +535,12 @@ def create_exam_page():
                             images = sum(len(q.get('saved_images', [])) for q in questions)
                             st.metric("Images", images)
 
-                        st.info("ðŸ‘‰ Go back to home to start studying!")
+                        st.info("👉 Go back to home to start studying!")
                     else:
-                        st.error("âŒ No valid questions found in uploaded files. Please check the folder structure and file naming.")
+                        st.error("❌ No valid questions found in uploaded files. Please check the folder structure and file naming.")
 
                 except Exception as e:
-                    st.error(f"âŒ Error processing files: {str(e)}")
+                    st.error(f"❌ Error processing files: {str(e)}")
                     import traceback
                     with st.expander("View error details"):
                         st.code(traceback.format_exc())
@@ -417,7 +552,7 @@ def study_exam_page():
 
     if not exam_data:
         st.error("Exam not found")
-        if st.button("â¬…ï¸ Back to Home"):
+        if st.button("⬅️ Back to Home"):
             st.session_state.current_page = "home"
             st.rerun()
         return
@@ -428,9 +563,9 @@ def study_exam_page():
     # Header
     col1, col2 = st.columns([3, 1])
     with col1:
-        st.title(f"ðŸ“– {exam_name}")
+        st.title(f"📖 {exam_name}")
     with col2:
-        if st.button("ðŸ  Exit to Home"):
+        if st.button("🏠 Exit to Home"):
             st.session_state.current_page = "home"
             st.rerun()
 
@@ -455,7 +590,7 @@ def study_exam_page():
 
         # Display images if available
         if 'saved_images' in question and question['saved_images']:
-            st.markdown("### ðŸ“· Images")
+            st.markdown("### 📷 Images")
             img_cols = st.columns(min(len(question['saved_images']), 3))
             for idx, img_file in enumerate(question['saved_images']):
                 img_path = DATA_DIR / exam_name / "images" / img_file
@@ -481,39 +616,34 @@ def study_exam_page():
 
     with col1:
         if not st.session_state.show_answer[question_id]:
-            if st.button("ðŸ’¡ Show Answer", key=f"show_{question_id}", use_container_width=True):
+            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
                 st.session_state.show_answer[question_id] = True
                 st.rerun()
         else:
-            if st.button("ðŸ”’ Hide Answer", key=f"hide_{question_id}", use_container_width=True):
+            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
                 st.session_state.show_answer[question_id] = False
                 st.rerun()
 
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
-        st.markdown('<div class="answer-section">', unsafe_allow_html=True)
+        st.markdown("### Answer Section")
 
         # Suggested Answer
         if 'suggested_answer' in question or 'correct_answer' in question:
-            st.markdown('<div class="suggested-answer">', unsafe_allow_html=True)
-            st.markdown("### âœ… Suggested Answer")
+            st.markdown("#### ✅ Suggested Answer")
             answer = question.get('suggested_answer') or question.get('correct_answer')
             st.markdown(f"**Answer: {answer}**")
             if answer in question.get('choices', {}):
                 st.markdown(f"*{question['choices'][answer]}*")
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # Discussion Summary
         if 'discussion_summary' in question:
-            st.markdown('<div class="discussion-summary">', unsafe_allow_html=True)
-            st.markdown("### ðŸ’¬ Internet Discussion Summary")
+            st.markdown("#### 💬 Internet Discussion Summary")
             st.markdown(question['discussion_summary'])
-            st.markdown('</div>', unsafe_allow_html=True)
 
         # AI Recommendation
         if 'ai_recommendation' in question:
-            st.markdown('<div class="ai-recommendation">', unsafe_allow_html=True)
-            st.markdown("### ðŸ¤– AI Recommended Answer")
+            st.markdown("#### 🤖 AI Recommended Answer")
             st.markdown(question['ai_recommendation'])
 
             # Citations
@@ -521,9 +651,6 @@ def study_exam_page():
                 st.markdown("**References:**")
                 for citation in question['ai_citations']:
                     st.markdown(f"- {citation}")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # Navigation
     st.markdown("---")
@@ -531,18 +658,18 @@ def study_exam_page():
 
     with col1:
         if current_idx > 0:
-            if st.button("â¬…ï¸ Previous", use_container_width=True):
+            if st.button("⬅️ Previous", use_container_width=True):
                 st.session_state.current_question_index -= 1
                 st.rerun()
 
     with col3:
         if current_idx < len(questions) - 1:
-            if st.button("Next âž¡ï¸", use_container_width=True):
+            if st.button("Next ➡️", use_container_width=True):
                 st.session_state.current_question_index += 1
                 st.rerun()
         else:
-            if st.button("ðŸŽ‰ Finish", use_container_width=True, type="primary"):
-                st.success("ðŸŽ‰ Congratulations! You've completed all questions!")
+            if st.button("🎉 Finish", use_container_width=True, type="primary"):
+                st.success("🎉 Congratulations! You've completed all questions!")
                 st.balloons()
 
 # ============= MAIN APPLICATION =============
@@ -553,13 +680,13 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.markdown("# ðŸŽ“ NotJustExam")
+        st.markdown("# 🎓 NotJustExam")
         st.markdown("### Premium Exam Dumps & Study Materials")
         st.markdown("---")
 
         # Navigation
         if st.session_state.current_page != "home":
-            if st.button("ðŸ  Home", use_container_width=True):
+            if st.button("🏠 Home", use_container_width=True):
                 st.session_state.current_page = "home"
                 st.rerun()
 
@@ -577,10 +704,10 @@ def main():
         st.markdown("### About")
         st.markdown("""
         NotJustExam provides comprehensive exam preparation materials featuring:
-        - âœ… Verified exam questions
-        - ðŸ’¬ Community discussions
-        - ðŸ¤– AI-powered explanations
-        - ðŸ“š Detailed references
+        - ✅ Verified exam questions
+        - 💬 Community discussions
+        - 🤖 AI-powered explanations
+        - 📚 Detailed references
         """)
 
     # Route to appropriate page

@@ -1,6 +1,7 @@
 """
-File Upload Helper Script
+File Upload Helper Script (Enhanced)
 This script helps prepare your question folders for upload to NotJustExam
+Now with automatic ZIP file creation for easy uploads!
 """
 
 import os
@@ -8,13 +9,14 @@ import shutil
 from pathlib import Path
 import zipfile
 
-def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
+def create_upload_package(source_dir: str, output_dir: str = "upload_package", create_zip: bool = True):
     """
     Prepare question folders for upload to NotJustExam
 
     Args:
         source_dir: Directory containing your topic_X_question_Y folders
         output_dir: Directory to create the upload package
+        create_zip: Automatically create ZIP file (default: True)
     """
     source_path = Path(source_dir)
     output_path = Path(output_dir)
@@ -27,11 +29,11 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
                            if d.is_dir() and d.name.startswith('topic_')])
 
     if not topic_folders:
-        print("âŒ No topic folders found!")
+        print("❌ No topic folders found!")
         print(f"   Looking for folders starting with 'topic_' in: {source_dir}")
-        return
+        return None
 
-    print(f"ðŸ“‚ Found {len(topic_folders)} topic folders")
+    print(f"📂 Found {len(topic_folders)} topic folders")
     print()
 
     total_questions = 0
@@ -51,9 +53,9 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
             source_file = folder / html_file
             if source_file.exists():
                 shutil.copy2(source_file, output_folder / html_file)
-                print(f"  âœ“ Copied {html_file}")
+                print(f"  ✓ Copied {html_file}")
             else:
-                print(f"  âš  Missing {html_file}")
+                print(f"  ⚠ Missing {html_file}")
 
         # Copy image files
         image_files = list(folder.glob('image_*.png')) + list(folder.glob('image_*.jpg'))
@@ -62,37 +64,70 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package"):
             total_images += 1
 
         if image_files:
-            print(f"  âœ“ Copied {len(image_files)} image(s)")
+            print(f"  ✓ Copied {len(image_files)} image(s)")
 
         total_questions += 1
         print()
 
     print("=" * 50)
-    print("âœ… Package created successfully!")
-    print(f"ðŸ“Š Summary:")
+    print("✅ Package created successfully!")
+    print(f"📊 Summary:")
     print(f"   - Total questions: {total_questions}")
     print(f"   - Total images: {total_images}")
     print(f"   - Output directory: {output_path.absolute()}")
     print()
-    print("ðŸ“¦ Next steps:")
+
+    # Create ZIP file
+    zip_path = None
+    if create_zip:
+        zip_name = f"{output_dir}.zip"
+        zip_path = create_zip_file(output_path, zip_name)
+        if zip_path:
+            print(f"✅ Created ZIP file: {zip_path}")
+            print(f"   Size: {os.path.getsize(zip_path) / 1024:.1f} KB")
+
+    print()
+    print("📦 Next steps:")
     print("   1. Go to your NotJustExam app")
     print("   2. Click 'Create New Exam'")
     print("   3. Enter an exam name")
-    print(f"   4. Upload all files from: {output_path.absolute()}")
+    if zip_path:
+        print(f"   4. Upload ZIP file: {zip_path}")
+    else:
+        print(f"   4. Upload all files from: {output_path.absolute()}")
     print()
 
-    # Optionally create a ZIP file
-    create_zip = input("Would you like to create a ZIP file? (y/n): ").lower()
-    if create_zip == 'y':
-        zip_name = f"{output_dir}.zip"
-        with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            for folder in output_path.rglob('*'):
-                if folder.is_file():
-                    arcname = folder.relative_to(output_path.parent)
-                    zipf.write(folder, arcname)
-        print(f"âœ… Created ZIP file: {zip_name}")
+    return zip_path
 
-def validate_folder_structure(folder_path: str):
+def create_zip_file(source_dir: Path, zip_name: str) -> str:
+    """
+    Create a ZIP file from directory contents
+
+    Args:
+        source_dir: Directory to zip
+        zip_name: Name of output ZIP file
+
+    Returns:
+        Path to created ZIP file
+    """
+    try:
+        zip_path = Path(zip_name)
+
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add all files maintaining folder structure
+            for file_path in source_dir.rglob('*'):
+                if file_path.is_file():
+                    # Create archive name relative to parent of source_dir
+                    arcname = file_path.relative_to(source_dir.parent)
+                    zipf.write(file_path, arcname)
+
+        return str(zip_path.absolute())
+
+    except Exception as e:
+        print(f"❌ Error creating ZIP file: {str(e)}")
+        return None
+
+def validate_folder_structure(folder_path: str) -> bool:
     """Validate a single topic folder structure"""
     folder = Path(folder_path)
 
@@ -105,6 +140,11 @@ def validate_folder_structure(folder_path: str):
     # Check folder name format
     if not folder.name.startswith('topic_'):
         errors.append("Folder name must start with 'topic_'")
+    else:
+        # Validate naming pattern
+        import re
+        if not re.match(r'topic_\d+_question_\d+', folder.name):
+            errors.append("Folder name must follow pattern: topic_X_question_Y")
 
     # Check required files
     required_files = ['summary_question.html', 'summary_discussion_ai.html']
@@ -113,62 +153,220 @@ def validate_folder_structure(folder_path: str):
         if not file_path.exists():
             errors.append(f"Missing required file: {req_file}")
         else:
-            print(f"âœ“ Found: {req_file}")
+            print(f"✓ Found: {req_file}")
+            # Validate file is not empty
+            if os.path.getsize(file_path) == 0:
+                warnings.append(f"{req_file} is empty")
 
     # Check for images
     image_files = list(folder.glob('image_*.*'))
     if image_files:
-        print(f"âœ“ Found {len(image_files)} image(s)")
+        print(f"✓ Found {len(image_files)} image(s)")
+        # Validate image naming
+        for img in image_files:
+            if not (img.suffix.lower() in ['.png', '.jpg', '.jpeg']):
+                warnings.append(f"Unsupported image format: {img.name}")
     else:
         warnings.append("No images found (optional)")
 
     # Report results
     print()
     if errors:
-        print("âŒ ERRORS:")
+        print("❌ ERRORS:")
         for error in errors:
             print(f"   - {error}")
 
     if warnings:
-        print("âš ï¸  WARNINGS:")
+        print("⚠️  WARNINGS:")
         for warning in warnings:
             print(f"   - {warning}")
 
     if not errors:
-        print("âœ… Folder structure is valid!")
+        print("✅ Folder structure is valid!")
 
     print()
     return len(errors) == 0
 
-if __name__ == "__main__":
-    print("=" * 50)
-    print("NotJustExam - File Upload Helper")
+def validate_all_folders(source_dir: str) -> bool:
+    """
+    Validate all topic folders in a directory
+
+    Args:
+        source_dir: Directory containing topic folders
+
+    Returns:
+        True if all folders are valid, False otherwise
+    """
+    source_path = Path(source_dir)
+
+    if not source_path.exists():
+        print(f"❌ Directory not found: {source_dir}")
+        return False
+
+    # Find all topic folders
+    topic_folders = sorted([d for d in source_path.iterdir() 
+                           if d.is_dir() and d.name.startswith('topic_')])
+
+    if not topic_folders:
+        print(f"❌ No topic folders found in: {source_dir}")
+        return False
+
+    print(f"📂 Found {len(topic_folders)} topic folders to validate")
     print("=" * 50)
     print()
 
+    all_valid = True
+    for folder in topic_folders:
+        if not validate_folder_structure(str(folder)):
+            all_valid = False
+        print()
+
+    print("=" * 50)
+    if all_valid:
+        print("✅ All folders are valid!")
+    else:
+        print("❌ Some folders have errors. Please fix them before uploading.")
+
+    return all_valid
+
+def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
+    """
+    Create a ZIP file directly from an existing directory structure
+
+    Args:
+        source_dir: Directory containing topic folders
+        zip_name: Optional custom ZIP filename
+
+    Returns:
+        Path to created ZIP file
+    """
+    source_path = Path(source_dir)
+
+    if not source_path.exists():
+        print(f"❌ Directory not found: {source_dir}")
+        return None
+
+    # Validate first
+    print("Validating folders...")
+    if not validate_all_folders(source_dir):
+        print()
+        create_anyway = input("Validation failed. Create ZIP anyway? (y/n): ").lower()
+        if create_anyway != 'y':
+            print("❌ Cancelled")
+            return None
+
+    print()
+
+    # Generate ZIP name if not provided
+    if not zip_name:
+        dir_name = source_path.name
+        zip_name = f"{dir_name}_exam.zip"
+
+    # Ensure .zip extension
+    if not zip_name.endswith('.zip'):
+        zip_name += '.zip'
+
+    print(f"Creating ZIP file: {zip_name}")
+
+    try:
+        with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Find all topic folders
+            topic_folders = [d for d in source_path.iterdir() 
+                           if d.is_dir() and d.name.startswith('topic_')]
+
+            file_count = 0
+            for folder in topic_folders:
+                # Add all files from this folder
+                for file_path in folder.rglob('*'):
+                    if file_path.is_file():
+                        # Create archive path: topic_X_question_Y/filename
+                        arcname = file_path.relative_to(source_path)
+                        zipf.write(file_path, arcname)
+                        file_count += 1
+
+        zip_path = Path(zip_name).absolute()
+        print()
+        print("=" * 50)
+        print("✅ ZIP file created successfully!")
+        print(f"   Path: {zip_path}")
+        print(f"   Size: {os.path.getsize(zip_path) / 1024:.1f} KB")
+        print(f"   Files: {file_count}")
+        print()
+        print("📦 Ready to upload to NotJustExam!")
+        print("=" * 50)
+
+        return str(zip_path)
+
+    except Exception as e:
+        print(f"❌ Error creating ZIP: {str(e)}")
+        return None
+
+def interactive_menu():
+    """Interactive menu for all operations"""
+    print("=" * 50)
+    print("NotJustExam - File Upload Helper (Enhanced)")
+    print("=" * 50)
+    print()
     print("Choose an option:")
-    print("1. Prepare upload package from source directory")
-    print("2. Validate single folder structure")
+    print("1. Create ZIP file from existing folders (Quick)")
+    print("2. Prepare upload package + create ZIP")
+    print("3. Validate single folder")
+    print("4. Validate all folders in directory")
+    print("5. Exit")
     print()
 
-    choice = input("Enter choice (1 or 2): ").strip()
+    choice = input("Enter choice (1-5): ").strip()
 
     if choice == "1":
+        print()
+        source = input("Enter directory path containing topic folders: ").strip()
+        if os.path.exists(source):
+            zip_name = input("Enter ZIP filename (press Enter for default): ").strip()
+            if not zip_name:
+                zip_name = None
+            create_zip_from_existing(source, zip_name)
+        else:
+            print(f"❌ Directory not found: {source}")
+
+    elif choice == "2":
+        print()
         source = input("Enter source directory path: ").strip()
         if os.path.exists(source):
             output = input("Enter output directory name (default: upload_package): ").strip()
             if not output:
                 output = "upload_package"
-            create_upload_package(source, output)
+            create_upload_package(source, output, create_zip=True)
         else:
-            print(f"âŒ Directory not found: {source}")
+            print(f"❌ Directory not found: {source}")
 
-    elif choice == "2":
+    elif choice == "3":
+        print()
         folder = input("Enter folder path to validate: ").strip()
         if os.path.exists(folder):
             validate_folder_structure(folder)
         else:
-            print(f"âŒ Folder not found: {folder}")
+            print(f"❌ Folder not found: {folder}")
+
+    elif choice == "4":
+        print()
+        source = input("Enter directory path containing topic folders: ").strip()
+        if os.path.exists(source):
+            validate_all_folders(source)
+        else:
+            print(f"❌ Directory not found: {source}")
+
+    elif choice == "5":
+        print("Goodbye!")
+        return False
 
     else:
-        print("âŒ Invalid choice")
+        print("❌ Invalid choice")
+
+    print()
+    return True
+
+if __name__ == "__main__":
+    # Run interactive menu
+    while interactive_menu():
+        input("Press Enter to continue...")
+        print("\n" * 2)
