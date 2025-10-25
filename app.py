@@ -118,7 +118,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             if header:
                 header.decompose()
             text = discussion_div.get_text(separator=' ', strip=True)
-            text = ' '.join(text.split())  # normalize whitespace
+            text = ' '.join(text.split())
             result['discussion_summary'] = text
         
         # Extract AI recommendation
@@ -141,7 +141,8 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         item_text = li.get_text(separator=' ', strip=True)
                         item_text = ' '.join(item_text.split())
                         if item_text:
-                            ul_items.append(f"  • {item_text}")
+                            # Use Markdown list syntax instead of bullet character
+                            ul_items.append(f"- {item_text}")
                     if ul_items:
                         ul_text = '\n'.join(ul_items)
                     # Remove UL from paragraph
@@ -149,7 +150,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 
                 # Now get paragraph text (with UL removed)
                 para_text = main_p.get_text(separator=' ', strip=True)
-                para_text = ' '.join(para_text.split())  # normalize whitespace
+                para_text = ' '.join(para_text.split())
                 
                 # Combine with proper formatting
                 if ul_text:
@@ -180,6 +181,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 result['ai_citations'] = citations
     
     return result
+
 
 
 def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
