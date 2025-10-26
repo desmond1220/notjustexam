@@ -133,6 +133,7 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
     if not html_content:
         return html_content
     
+    # Parse without adding html/body wrapper tags
     soup = BeautifulSoup(html_content, 'html.parser')
     images = soup.find_all('img')
     
@@ -171,8 +172,11 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
                 if b64:
                     img['src'] = b64
     
+    # Return decoded content to preserve original HTML structure
+    # Use decode_contents() for fragments or str() for complete documents
+    if hasattr(soup, 'decode_contents'):
+        return soup.decode_contents()
     return str(soup)
-
 
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
