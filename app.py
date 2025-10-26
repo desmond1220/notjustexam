@@ -302,8 +302,12 @@ body{{padding:4px}}
         
         # If we have HTML answer with detailed content, use that instead of just the letter
         if answer_html:
-            # Don't wrap in answer-content div - answer_html already has proper structure
-            html += f'{answer_imgs}{answer_html}'
+            soup = BeautifulSoup(answer_html, 'html.parser')
+            # Find and remove all img tags
+            for img_tag in soup.find_all('img'):
+                img_tag.decompose()  # Remove the tag completely
+            answer_html = str(soup)
+            html += f'<div class="answer-content"><h5>✅ Suggested Answer</h5><div style="padding:10px">{answer_imgs}{answer_html}</div></div>'
         else:
             # Fallback to simple answer letter if no HTML
             html += f'<h4>✅ Answer: {ans}</h4>'
