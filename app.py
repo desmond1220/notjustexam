@@ -273,23 +273,24 @@ body{{padding:4px}}
 <div>{opts}</div>
 <div class="answer hidden" id="a{i}">'''
         
-    # If we have HTML answer with detailed content, use that instead of just the letter
-    if answer_html:
-        html += f'<div class="answer-content">{answer_html}</div>'
-    else:
-        # Fallback to simple answer letter if no HTML
-        html += f'<h4>✅ Answer: {ans}</h4>'
+        # If we have HTML answer with detailed content, use that instead of just the letter
+        if answer_html:
+            html += f'<div class="answer-content">{answer_html}</div>'
+        else:
+            # Fallback to simple answer letter if no HTML
+            html += f'<h4>✅ Answer: {ans}</h4>'
 
-    # Add discussion and AI sections
-    if disc_html:
-        html += f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>'
-    if ai_html:
-        html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
+        # Add discussion and AI sections
+        if disc_html:
+            html += f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>'
+        if ai_html:
+            html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
 
-    html += '</div>\n</div>\n'
+        html += '</div>\n</div>\n'
 
     # Add JavaScript
     html += f'''
+</div></div>
 <script>
 let c=0,t={count},ans={{}},s=false;
 function load(){{let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}show(c)}}
