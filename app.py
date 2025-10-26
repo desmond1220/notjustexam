@@ -247,10 +247,15 @@ body{{padding:4px}}
         
         # Build choices
         opts = ""
-        for letter, choice in sorted(choices.items()):
-            correct = "true" if letter == ans else "false"
-            opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
-        
+        if choices:
+            for letter, choice in sorted(choices.items()):
+                correct = "true" if letter == ans else "false"
+                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
+        elif q.get('question_type') == 'hotspot':
+            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
+        else:
+            opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
+
         # Embed images
         imgs = ""
         for img_file in q.get('saved_images', []):
@@ -380,20 +385,49 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             images = question_div.find_all('img')
             result['question_images'] = [img.get('src', '') for img in images]
         
-        # Extract choices
+        # Extract choices - Try multiple formats
         choices = {}
+        
+        # Format 1: Standard multiple choice with <li class="multi-choice-item">
         choice_items = soup.find_all('li', class_='multi-choice-item')
-        for item in choice_items:
-            letter_span = item.find('span', class_='multi-choice-letter')
-            if letter_span:
-                letter = letter_span.get('data-choice-letter', '')
-                choice_text = item.get_text(separator=' ', strip=True)
-                choice_text = choice_text.replace(f"{letter}.", "", 1).strip()
-                choice_text = ' '.join(choice_text.split())
-                choices[letter] = choice_text
+        if choice_items:
+            for item in choice_items:
+                letter_span = item.find('span', class_='multi-choice-letter')
+                if letter_span:
+                    letter = letter_span.get('data-choice-letter', '')
+                    choice_text = item.get_text(separator=' ', strip=True)
+                    choice_text = choice_text.replace(f"{letter}.", "", 1).strip()
+                    choice_text = ' '.join(choice_text.split())
+                    choices[letter] = choice_text
+                    
+                    if 'correct-hidden' in item.get('class', []):
+                        result['correct_answer'] = letter
+        
+        # Format 2: HOTSPOT / Hot Area questions (dropdown or text boxes)
+        # These typically have descriptive text without standard A/B/C/D options
+        else:
+            # Look for "Hot Area" or "HOTSPOT" indicators
+            question_text = result.get('question', '')
+            if 'hot area' in question_text.lower() or 'hotspot' in question_text.lower():
+                # This is a hotspot question - mark it as such
+                result['question_type'] = 'hotspot'
+                result['choices'] = {}  # No traditional choices
                 
-                if 'correct-hidden' in item.get('class', []):
-                    result['correct_answer'] = letter
+                # Try to extract any specific prompt text after "Hot Area:"
+                hot_area_match = re.search(r'Hot Area:(.+?)(?:\n|$)', question_text, re.IGNORECASE | re.DOTALL)
+                if hot_area_match:
+                    result['hotspot_prompt'] = hot_area_match.group(1).strip()
+            else:
+                # Try alternative formats - look for any list items
+                all_lis = soup.find_all('li')
+                if all_lis:
+                    # Try to extract as simple list
+                    for i, li in enumerate(all_lis, start=65):  # Start at ASCII 'A'
+                        text = li.get_text(separator=' ', strip=True)
+                        text = ' '.join(text.split())
+                        if text:
+                            letter = chr(i)
+                            choices[letter] = text
         
         result['choices'] = choices
         
@@ -402,9 +436,15 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         answer_div = soup.find('div', class_='answer')
         if answer_div:
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
+            
+            # Try to find answer letter
             match = re.search(r'Suggested Answer[:\s]+([A-Z])', suggested_answer_text)
             if match:
                 result['suggested_answer'] = match.group(1)
+            else:
+                # For HOTSPOT questions, the answer might be descriptive
+                # Extract the full answer text
+                result['suggested_answer'] = 'See Discussion'
             
             # Extract images from ANSWER HTML only  
             images = answer_div.find_all('img')
@@ -1108,7 +1148,7 @@ def study_exam_page():
     with st.container():
         # st.markdown('<div class="question-container">', unsafe_allow_html=True)
 
-        st.markdown("### Question")
+        # st.markdown("### Question")
         st.markdown(question.get('question', 'No question text available'))
 
         # # Display images if available
@@ -1128,11 +1168,24 @@ def study_exam_page():
                 if img_path.exists():
                     st.image(str(img_path))
 
-        # Choices
-        if 'choices' in question and question['choices']:
-            st.markdown("### Answer Options")
-            for letter, choice_text in sorted(question['choices'].items()):
-                st.markdown(f"**{letter}.** {choice_text}")
+        # Display answer choices if they exist
+        if question.get('choices'):
+            st.markdown("### Answer Options:")
+            for letter, text in sorted(question['choices'].items()):
+                is_correct = (letter == question.get('suggested_answer', '') or 
+                            letter == question.get('correct_answer', ''))
+                
+                if st.session_state.show_answer.get(current_idx, False) and is_correct:
+                    st.success(f"**{letter}.** {text} ✓")
+                else:
+                    st.info(f"**{letter}.** {text}")
+        elif question.get('question_type') == 'hotspot':
+            # For HOTSPOT questions, show prompt if available
+            if question.get('hotspot_prompt'):
+                st.info(f"📝 {question['hotspot_prompt']}")
+            st.warning("⚠️ This is a HOTSPOT/Hot Area question. Click 'Show Answer' to see the solution.")
+        else:
+            st.warning("⚠️ No answer options available. This may be a fill-in or hotspot question.")
 
         # st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1157,8 +1210,6 @@ def study_exam_page():
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
         with st.container():
-            st.markdown("### ✅ Answer")
-            
             # Show answer images only here
             if question.get('answer_images'):
                 for img_file in question['answer_images']:
