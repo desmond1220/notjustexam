@@ -181,11 +181,11 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
 
 def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
     """
-    Remove duplicate text chunks efficiently.
-    Handles exact duplicates and near-duplicates.
+    Remove duplicate text chunks that appear consecutively in the text.
+    Handles cases where duplication starts after a short header.
     
     Args:
-        text: The text to deduplicate  
+        text: The text to deduplicate
         min_chunk_size: Minimum length of duplicate chunks to remove (default 150)
     
     Returns:
@@ -195,24 +195,43 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
         return text
     
     text_len = len(text)
+    lines = text.split('\n')
     
-    # Method 1: Check if entire text is duplicated (most common case)
-    # Split the text in half and compare
-    for split_point in range(text_len // 2 - 10, text_len // 2 + 10):
-        if split_point > min_chunk_size:
-            first_part = text[:split_point].strip()
-            second_part = text[split_point:].strip()
+    # Method 1: Line-based deduplication (most reliable for this case)
+    # Check if the text contains repeating blocks of lines
+    if len(lines) > 4:
+        # Try to find where the duplicate starts
+        for split_point in range(1, len(lines) // 2 + 1):
+            first_part_lines = lines[:split_point]
             
-            if first_part == second_part:
-                return first_part
+            # Look for this block repeating later in the text
+            for search_start in range(split_point, len(lines)):
+                if search_start + split_point <= len(lines):
+                    potential_duplicate = lines[search_start:search_start + split_point]
+                    
+                    # Check if we found a matching block
+                    if first_part_lines == potential_duplicate and split_point > 2:
+                        # Found duplicate! Return text up to where duplicate starts
+                        return '\n'.join(lines[:search_start]).strip()
     
-    # Method 2: Look for large duplicate chunks
-    # Start with largest possible chunks and work down
-    for chunk_size in range(text_len // 2, min_chunk_size - 1, -50):
-        chunk = text[:chunk_size]
-        if chunk in text[chunk_size:]:
-            # Found duplicate, return text up to first occurrence
-            return chunk.strip()
+    # Method 2: Character-based deduplication
+    # Look for the largest repeating chunk
+    for start_offset in range(0, min(100, text_len // 3)):
+        for chunk_size in range(text_len // 2 - start_offset, min_chunk_size, -10):
+            chunk_start = start_offset
+            chunk_end = chunk_start + chunk_size
+            
+            if chunk_end > text_len:
+                continue
+                
+            chunk = text[chunk_start:chunk_end]
+            
+            # Search for this chunk appearing again later
+            next_occurrence = text.find(chunk, chunk_end)
+            
+            if next_occurrence != -1:
+                # Found duplicate - return text up to second occurrence
+                return text[:next_occurrence].strip()
     
     return text
 
@@ -290,7 +309,7 @@ body{{padding:4px}}
         text = q.get('question', 'No question')
         choices = q.get('choices', {})
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
-        
+
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=150)
         # Just use text as-is with basic line break formatting
