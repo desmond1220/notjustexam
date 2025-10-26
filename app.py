@@ -133,8 +133,18 @@ def convert_html_images_to_base64(html_content: str, exam_name: str) -> str:
     for img in images:
         src = img.get('src', '')
         if src and not src.startswith('data:'):  # Skip if already base64
-            # Get image path
-            img_path = DATA_DIR / exam_name / "images" / src
+            # Image files are saved with folder prefix, so we need to find them
+            # e.g., HTML has "image_1.png" but file is "topic_1_question_5_image_1.png"
+            images_dir = DATA_DIR / exam_name / "images"
+            
+            # Try exact match first
+            img_path = images_dir / src
+            if not img_path.exists():
+                # Try glob pattern to find file with prefix
+                matching_files = list(images_dir.glob(f"*_{src}"))
+                if matching_files:
+                    img_path = matching_files[0]  # Use first match
+            
             if img_path.exists():
                 # Convert to base64
                 b64 = image_to_base64(str(img_path))
@@ -142,7 +152,6 @@ def convert_html_images_to_base64(html_content: str, exam_name: str) -> str:
                     img['src'] = b64
     
     return str(soup)
-
 
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
