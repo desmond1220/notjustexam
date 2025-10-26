@@ -126,88 +126,51 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
     def format_text(text):
-        """Convert text to HTML with proper line breaks and lists - handles natural paragraphs"""
+        """Convert text to HTML with proper line breaks and lists"""
         if not text:
             return ""
         
-        # Remove header if present
-        if text.startswith('AI Recommended Answer'):
-            text = text.replace('AI Recommended Answer', '', 1).strip()
+        # Replace multiple newlines with paragraph breaks
+        text = text.strip()
         
-        # First normalize: fix broken sentences by detecting sentence fragments
+        # Split into lines
         lines = text.split('\n')
-        fixed_lines = []
+        formatted = []
+        in_list = False
         
-        for i, line in enumerate(lines):
+        for line in lines:
             stripped = line.strip()
+            
             if not stripped:
-                fixed_lines.append('')
+                # Empty line - close list if open, add paragraph break
+                if in_list:
+                    formatted.append('</ul>')
+                    in_list = False
+                formatted.append('<br>')
                 continue
             
-            # If line is very short (< 20 chars) and doesn't end with punctuation or colon,
-            # it's probably a sentence fragment - merge with next line
-            if len(stripped) < 20 and not stripped.endswith(('.', ':', '!', '?')) and i < len(lines) - 1:
-                # Don't merge if next line starts a new section
-                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ''
-                if not re.match(r'^([A-Z]\.|\*\*[A-Z]\.|Why|Reasoning:|Suggested)', next_line):
-                    # Merge this line with previous or next
-                    if fixed_lines and not fixed_lines[-1].endswith((':','')):
-                        fixed_lines[-1] = fixed_lines[-1] + ' ' + stripped
-                        continue
-            
-            fixed_lines.append(stripped)
-        
-        # Now process into paragraphs
-        paragraphs = []
-        current_para = []
-        
-        for line in fixed_lines:
-            if not line:
-                # Empty line = paragraph break
-                if current_para:
-                    paragraphs.append(' '.join(current_para))
-                    current_para = []
-                continue
-            
-            # Check if line starts a new section
-            is_new_section = bool(re.match(r'^([A-Z]\.|\*\*[A-Z]\.|Why|Reasoning:|Suggested Answer:)', line))
-            
-            if is_new_section and current_para:
-                # Save previous paragraph and start new one
-                paragraphs.append(' '.join(current_para))
-                current_para = [line]
+            # Check if line is a list item (starts with - or •)
+            if stripped.startswith(('- ', '• ', '* ')):
+                if not in_list:
+                    formatted.append('<ul style="margin:12px 0;padding-left:24px">')
+                    in_list = True
+                
+                # Remove list marker and create list item
+                item_text = stripped[2:].strip()
+                formatted.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
             else:
-                current_para.append(line)
+                # Regular text line
+                if in_list:
+                    formatted.append('</ul>')
+                    in_list = False
+                
+                formatted.append(f'<p style="margin:8px 0">{stripped}</p>')
         
-        # Don't forget last paragraph
-        if current_para:
-            paragraphs.append(' '.join(current_para))
+        # Close list if still open
+        if in_list:
+            formatted.append('</ul>')
         
-        # Format each paragraph as HTML
-        formatted_parts = []
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
-                continue
-            
-            # Single list item check
-            if para.startswith(('- ', '• ', '* ')):
-                item_text = para.lstrip('-•* ').strip()
-                formatted_parts.append(f'<ul style="margin:12px 0;padding-left:24px"><li style="margin:8px 0;line-height:1.6">{item_text}</li></ul>')
-            else:
-                # Regular paragraph - add sentence breaks for readability
-                # Split on ". " (period followed by space) and rejoin with break
-                sentences = para.split('. ')
-                if len(sentences) > 2:  # Only add breaks for long paragraphs with multiple sentences
-                    formatted_para = '. '.join(sentences[:2]) + '.' + '<br><br>' + '. '.join(sentences[2:])
-                    # Fix any double periods
-                    formatted_para = formatted_para.replace('..', '.')
-                    formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{formatted_para}</p>')
-                else:
-                    formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{para}</p>')
-        
-        return ''.join(formatted_parts)
-
+        return ''.join(formatted)
     
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
@@ -498,30 +461,43 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             text = '\n'.join(text.split())
             result['discussion_summary'] = text
         
-            # Extract AI recommendation
-            ai_div = soup.find('div', class_='ai-recommendation')
-            if ai_div:
-                # Remove citation header and list (we'll extract separately)
-                citation_header = None
-                for h3 in ai_div.find_all('h3'):
-                    if 'citation' in h3.get_text().lower():
-                        citation_header = h3
-                        break
+        # Extract AI recommendation
+        ai_div = soup.find('div', class_='ai-recommendation')
+        if ai_div:
+            # Remove all headers except Citations
+            for h in ai_div.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+                if 'citation' not in h.get_text().lower():
+                    h.decompose()
+            
+            # Find main paragraph
+            main_p = ai_div.find('p')
+            if main_p:
+                # Extract nested UL first
+                nested_ul = main_p.find('ul')
+                ul_text = ""
+                if nested_ul:
+                    ul_items = []
+                    for li in nested_ul.find_all('li', recursive=False):
+                        item_text = li.get_text(separator=' ', strip=True)
+                        item_text = ' '.join(item_text.split())
+                        if item_text:
+                            ul_items.append(f"- {item_text}")
+                    
+                    if ul_items:
+                        ul_text = '\n'.join(ul_items)
+                    
+                    nested_ul.decompose()
                 
-                if citation_header:
-                    # Remove citations section from main text
-                    citation_ul = citation_header.find_next_sibling('ul')
-                    if citation_ul:
-                        citation_ul.decompose()
-                    citation_header.decompose()
+                # Now get paragraph text
+                para_text = main_p.get_text(separator='\n', strip=True)
+                para_text = '\n'.join(para_text.split())
                 
-                # Get ALL text from ai_div (not just first paragraph)
-                full_ai_text = ai_div.get_text(separator='\n', strip=True)
+                if ul_text:
+                    full_text = f"{para_text}\n{ul_text}"
+                else:
+                    full_text = para_text
                 
-                # Clean up the text
-                if full_ai_text:
-                    result['ai_recommendation'] = full_ai_text
-
+                result['ai_recommendation'] = full_text
             
             # Extract citations
             citations = []
