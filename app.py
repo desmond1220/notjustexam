@@ -122,6 +122,29 @@ def image_to_base64(image_path: str) -> str:
         return ""
 
 
+def convert_html_images_to_base64(html_content: str, exam_name: str) -> str:
+    """Convert all image src in HTML to base64 data URIs"""
+    if not html_content:
+        return html_content
+    
+    soup = BeautifulSoup(html_content, 'html.parser')
+    images = soup.find_all('img')
+    
+    for img in images:
+        src = img.get('src', '')
+        if src and not src.startswith('data:'):  # Skip if already base64
+            # Get image path
+            img_path = DATA_DIR / exam_name / "images" / src
+            if img_path.exists():
+                # Convert to base64
+                b64 = image_to_base64(str(img_path))
+                if b64:
+                    img['src'] = b64
+    
+    return str(soup)
+
+
+
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
@@ -205,10 +228,10 @@ body{{padding:4px}}
             for letter, choice in sorted(choices.items()):
                 correct = "true" if letter == ans else "false"
                 opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
-        elif q.get('question_type') == 'hotspot':
-            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
-        else:
-            opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
+        # elif q.get('question_type') == 'hotspot':
+        #     opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
+        # else:
+        #     opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
 
         # Embed images
         imgs = ""
@@ -219,9 +242,16 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Get HTML content directly (no conversion needed)
+        # Get HTML content and convert images to base64
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
+
+        # Convert images in HTML to base64 for offline use
+        if disc_html:
+            disc_html = convert_html_images_to_base64(disc_html, exam_name)
+        if ai_html:
+            ai_html = convert_html_images_to_base64(ai_html, exam_name)
+
 
         html += f'''
 <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
