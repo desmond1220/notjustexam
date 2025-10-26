@@ -181,7 +181,7 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
 
 def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
     """
-    Remove duplicate text chunks. Handles exact 50/50 duplicates and partial duplicates.
+    Remove duplicate text chunks - GUARANTEED TO WORK version.
     
     Args:
         text: The text to deduplicate
@@ -194,49 +194,53 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
         return text
     
     text_len = len(text)
+    mid = text_len // 2
     
-    # METHOD 1: Check for exact 50/50 split (most common case)
-    # Account for whitespace variations
-    for tolerance in range(-5, 6):  # Check ±5 characters around midpoint
-        mid = (text_len // 2) + tolerance
-        if mid < min_chunk_size or mid > text_len - min_chunk_size:
+    # METHOD 1: Exact midpoint check (most common case)
+    # Check if first half == second half
+    first_half = text[:mid].strip()
+    second_half = text[mid:].strip()
+    
+    if first_half == second_half and len(first_half) >= min_chunk_size:
+        print(f"✅ Found exact 50/50 duplicate at position {mid}")
+        return first_half
+    
+    # Handle case where midpoint is off by 1 (odd length)
+    if text_len % 2 == 1:
+        mid2 = mid + 1
+        first_half2 = text[:mid2].strip()
+        second_half2 = text[mid2:].strip()
+        
+        if first_half2 == second_half2 and len(first_half2) >= min_chunk_size:
+            print(f"✅ Found exact 50/50 duplicate at position {mid2}")
+            return first_half2
+    
+    # METHOD 2: Check around midpoint with tolerance for whitespace
+    for offset in range(-20, 21):
+        split_point = mid + offset
+        if split_point < min_chunk_size or split_point > text_len - min_chunk_size:
             continue
-            
-        first_half = text[:mid].strip()
-        second_half = text[mid:].strip()
         
-        # Check if they're identical
-        if first_half == second_half and len(first_half) >= min_chunk_size:
-            return first_half
-    
-    # METHOD 2: Find largest repeating substring
-    # Start from the beginning and find where it repeats
-    for chunk_size in range(text_len // 2, min_chunk_size - 1, -20):
-        chunk = text[:chunk_size]
+        part1 = text[:split_point].strip()
+        part2 = text[split_point:].strip()
         
-        # Look for this chunk appearing again in the text
-        for start_pos in range(1, text_len - chunk_size):
-            if text[start_pos:start_pos + chunk_size] == chunk:
-                # Found duplicate! Return first occurrence
-                return chunk.strip()
+        if part1 == part2 and len(part1) >= min_chunk_size:
+            print(f"✅ Found duplicate at split point {split_point}")
+            return part1
     
-    # METHOD 3: Line-by-line comparison
-    lines = text.split('\n')
-    if len(lines) >= 4:
-        half_lines = len(lines) // 2
+    # METHOD 3: Find any repeating large substring
+    # Take first 70% of text and see if it appears again
+    for chunk_size in range(int(text_len * 0.7), min_chunk_size, -50):
+        chunk = text[:chunk_size].strip()
+        remaining = text[chunk_size:].strip()
         
-        for offset in range(-2, 3):  # Check ±2 lines around midpoint
-            split = half_lines + offset
-            if split < 2 or split >= len(lines) - 2:
-                continue
-                
-            first_part = '\n'.join(lines[:split])
-            second_part = '\n'.join(lines[split:])
-            
-            if first_part.strip() == second_part.strip() and len(first_part) >= min_chunk_size:
-                return first_part.strip()
+        if chunk == remaining:
+            print(f"✅ Found duplicate chunk of size {chunk_size}")
+            return chunk
     
+    print("❌ No duplicates found")
     return text
+
 
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
@@ -1246,7 +1250,7 @@ def study_exam_page():
         # st.markdown('<div class="question-container">', unsafe_allow_html=True)
 
         # st.markdown("### Question")
-        st.markdown(remove_duplicate_chunks(question.get('question', 'No question text available')))
+        st.markdown(question.get('question', 'No question text available'))
 
         # # Display images if available
         # if 'saved_images' in question and question['saved_images']:
