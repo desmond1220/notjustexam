@@ -230,19 +230,6 @@ body{{padding:4px}}
         {f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>' if ai_html else ""}
         </div>
         '''
-        
-        html += f'''
-<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
-<h3>Topic {topic} - Question {qnum}</h3>
-<div class="question-text">{formatted_text}</div>
-{imgs}
-<div>{opts}</div>
-<div class="answer hidden" id="a{i}">
-<h4>✅ Answer: {ans}</h4>
-{f'<div class="answer-content"><h5>💬 Discussion</h5>{disc}</div>' if disc else ""}
-{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5>{ai}</div>' if ai else ""}
-</div>
-</div>'''
     
     # Add JavaScript
     html += f'''
@@ -1172,7 +1159,7 @@ def study_exam_page():
 
         # Show AI recommendation - RENDER HTML
         if question.get('ai_recommendation_html'):
-            st.markdown("### 🤖 AI Recommendation")  
+            # st.markdown("### 🤖 AI Recommendation")  
             st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
 
             # Citations
