@@ -286,7 +286,7 @@ body{{padding:4px}}
     if ai_html:
         html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
 
-    html += '</div>\n</div>\n'
+    # html += '</div>\n</div>\n'
 
     # Add JavaScript
     html += f'''
