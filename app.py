@@ -387,11 +387,14 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         
         # Extract choices - Try multiple formats
         choices = {}
+        correct_answer = None
         
-        # Format 1: Standard multiple choice with <li class="multi-choice-item">
+        # Find all multi-choice items
         choice_items = soup.find_all('li', class_='multi-choice-item')
+        
         if choice_items:
             for item in choice_items:
+                # Try Format 1: <span class="multi-choice-letter" data-choice-letter="A">
                 letter_span = item.find('span', class_='multi-choice-letter')
                 if letter_span:
                     letter = letter_span.get('data-choice-letter', '')
@@ -399,37 +402,35 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                     choice_text = choice_text.replace(f"{letter}.", "", 1).strip()
                     choice_text = ' '.join(choice_text.split())
                     choices[letter] = choice_text
-                    
-                    if 'correct-hidden' in item.get('class', []):
-                        result['correct_answer'] = letter
-        
-        # Format 2: HOTSPOT / Hot Area questions (dropdown or text boxes)
-        # These typically have descriptive text without standard A/B/C/D options
-        else:
-            # Look for "Hot Area" or "HOTSPOT" indicators
-            question_text = result.get('question', '')
-            if 'hot area' in question_text.lower() or 'hotspot' in question_text.lower():
-                # This is a hotspot question - mark it as such
-                result['question_type'] = 'hotspot'
-                result['choices'] = {}  # No traditional choices
+                else:
+                    # Try Format 2: <span> with letter as text content
+                    first_span = item.find('span')
+                    if first_span:
+                        # Get the letter from span text
+                        span_text = first_span.get_text(strip=True)
+                        # Extract letter (A, B, C, D, etc.) - remove any dots or whitespace
+                        letter = span_text.strip().rstrip('.')
+                        
+                        # Get the full choice text and remove the letter part
+                        full_text = item.get_text(separator=' ', strip=True)
+                        # Remove the letter from the beginning
+                        choice_text = full_text.replace(span_text, '', 1).strip()
+                        choice_text = ' '.join(choice_text.split())
+                        
+                        if letter and choice_text:
+                            choices[letter] = choice_text
                 
-                # Try to extract any specific prompt text after "Hot Area:"
-                hot_area_match = re.search(r'Hot Area:(.+?)(?:\n|$)', question_text, re.IGNORECASE | re.DOTALL)
-                if hot_area_match:
-                    result['hotspot_prompt'] = hot_area_match.group(1).strip()
-            else:
-                # Try alternative formats - look for any list items
-                all_lis = soup.find_all('li')
-                if all_lis:
-                    # Try to extract as simple list
-                    for i, li in enumerate(all_lis, start=65):  # Start at ASCII 'A'
-                        text = li.get_text(separator=' ', strip=True)
-                        text = ' '.join(text.split())
-                        if text:
-                            letter = chr(i)
-                            choices[letter] = text
+                # Check if this is the correct answer
+                if 'correct-hidden' in item.get('class', []):
+                    # Get the letter for this item
+                    if letter_span:
+                        correct_answer = letter_span.get('data-choice-letter', '')
+                    elif first_span:
+                        correct_answer = first_span.get_text(strip=True).rstrip('.')
         
         result['choices'] = choices
+        if correct_answer:
+            result['correct_answer'] = correct_answer
         
     elif content_type == 'answer':
         # Extract suggested answer
@@ -443,7 +444,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 result['suggested_answer'] = match.group(1)
             else:
                 # For HOTSPOT questions, the answer might be descriptive
-                # Extract the full answer text
                 result['suggested_answer'] = 'See Discussion'
             
             # Extract images from ANSWER HTML only  
