@@ -614,15 +614,11 @@ def unlock_exam_dialog(exam_name: str):
                     # Add to authenticated exams
                     if exam_name not in st.session_state.authenticated_exams:
                         st.session_state.authenticated_exams.append(exam_name)
-
+                    
                     st.success("✅ Exam unlocked successfully!")
                     del st.session_state.exam_to_unlock
-
-                    # Redirect to study
-                    st.session_state.selected_exam = exam_name
-                    st.session_state.current_page = "study_exam"
-                    st.session_state.current_question_index = 0
-                    st.session_state.show_answer = {}
+                    
+                    # Stay on home page to show unlocked view (don't redirect to study)
                     st.rerun()
                 else:
                     st.error("❌ Incorrect password. Please try again.")
