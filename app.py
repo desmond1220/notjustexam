@@ -140,21 +140,39 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
         src = img.get('src', '')
         if src and not src.startswith('data:'):  # Skip if already base64
             images_dir = DATA_DIR / exam_name / "images"
+            img_path = None
             
             # Try exact match first
-            img_path = images_dir / src
-            if not img_path.exists() and folder_prefix:
+            test_path = images_dir / src
+            if test_path.exists():
+                img_path = test_path
+            elif folder_prefix:
                 # Try with the specific folder prefix for this question
                 prefixed_name = f"{folder_prefix}_{src}"
-                img_path = images_dir / prefixed_name
+                test_path = images_dir / prefixed_name
+                if test_path.exists():
+                    img_path = test_path
+                else:
+                    # Last resort: try glob pattern to find any match
+                    matching_files = list(images_dir.glob(f"*_{src}"))
+                    if matching_files:
+                        # Prefer files with the correct folder prefix
+                        for match in matching_files:
+                            if match.name.startswith(folder_prefix):
+                                img_path = match
+                                break
+                        # If no exact prefix match, use first match
+                        if not img_path:
+                            img_path = matching_files[0]
             
-            if img_path.exists():
+            if img_path and img_path.exists():
                 # Convert to base64
                 b64 = image_to_base64(str(img_path))
                 if b64:
                     img['src'] = b64
     
     return str(soup)
+
 
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
@@ -259,8 +277,15 @@ body{{padding:4px}}
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
 
-        # Get the folder prefix for this question to find correct images
-        folder_prefix = q.get('folder_name', '')  # e.g., 'topic_1_question_5'
+        # Construct the folder prefix for this question to find correct images
+        # Use stored folder_name or reconstruct from topic and question_num
+        folder_prefix = q.get('folder_name', '')
+        if not folder_prefix:
+            # Reconstruct from topic and question number
+            topic = q.get('topic', '')
+            qnum = q.get('question_num', '')
+            if topic and qnum:
+                folder_prefix = f"topic_{topic}_question_{qnum}"
 
         # Convert images in HTML to base64 for offline use (pass folder prefix)
         if answer_html:
@@ -269,6 +294,7 @@ body{{padding:4px}}
             disc_html = convert_html_images_to_base64(disc_html, exam_name, folder_prefix)
         if ai_html:
             ai_html = convert_html_images_to_base64(ai_html, exam_name, folder_prefix)
+
 
         html += f'''
 <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
