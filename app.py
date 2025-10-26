@@ -224,12 +224,17 @@ body{{padding:4px}}
         ai_html = q.get('ai_recommendation_html', '')
 
         html += f'''
-        <div class="answer hidden" id="a{i}">
-        <h4>✅ Answer: {ans}</h4>
-        {f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>' if disc_html else ""}
-        {f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>' if ai_html else ""}
-        </div>
-        '''
+<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
+<h3>Topic {topic} - Question {qnum}</h3>
+<div class="question-text">{formatted_text}</div>
+{imgs}
+<div>{opts}</div>
+<div class="answer hidden" id="a{i}">
+<h4>✅ Answer: {ans}</h4>
+{f'<div class="answer-content"><h5>💬 Discussion</h5>{disc_html}</div>' if disc_html else ""}
+{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5>{ai_html}</div>' if ai_html else ""}
+</div>
+</div>'''
     
     # Add JavaScript
     html += f'''
