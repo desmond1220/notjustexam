@@ -17,20 +17,8 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import io
 import hashlib
+import base64
 
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def verify_password(input_password: str, stored_hash: str) -> bool:
-    """Verify password against stored hash"""
-    return hash_password(input_password) == stored_hash
-
-def is_exam_authenticated(exam_name: str) -> bool:
-    """Check if exam is authenticated in current session"""
-    if "authenticated_exams" not in st.session_state:
-        st.session_state.authenticated_exams = []
-    return exam_name in st.session_state.authenticated_exams
 
 # Page configuration
 st.set_page_config(
@@ -77,6 +65,285 @@ def initialize_session_state():
         st.session_state.authenticated_exams = []
     if "password_attempt" not in st.session_state:  # NEW
         st.session_state.password_attempt = {}
+
+def hash_password(password: str) -> str:
+    """Hash password using SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(input_password: str, stored_hash: str) -> bool:
+    """Verify password against stored hash"""
+    return hash_password(input_password) == stored_hash
+
+def is_exam_authenticated(exam_name: str) -> bool:
+    """Check if exam is authenticated in current session"""
+    if "authenticated_exams" not in st.session_state:
+        st.session_state.authenticated_exams = []
+    return exam_name in st.session_state.authenticated_exams
+
+def image_to_base64(image_path: str) -> str:
+    """Convert image file to base64 data URI for embedding"""
+    try:
+        with open(image_path, 'rb') as f:
+            image_data = f.read()
+            base64_data = base64.b64encode(image_data).decode('utf-8')
+            
+            ext = Path(image_path).suffix.lower()
+            mime_types = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp'
+            }
+            mime_type = mime_types.get(ext, 'image/jpeg')
+            
+            return f"data:{mime_type};base64,{base64_data}"
+    except Exception as e:
+        return ""
+
+
+def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
+    """Generate self-contained HTML file for offline study with mobile optimization"""
+    
+    questions = exam_data['questions']
+    exam_title = exam_data.get('exam_name', exam_name)
+    question_count = exam_data.get('question_count', len(questions))
+    
+    # Start building HTML
+    html_content = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>{exam_title} - Offline Study</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f7fa;
+            padding: 8px;
+        }}
+        .container {{
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }}
+        .header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px;
+            text-align: center;
+            border-radius: 12px 12px 0 0;
+        }}
+        .header h1 {{ font-size: 26px; font-weight: 700; }}
+        .nav {{
+            background: #f8f9fa;
+            padding: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }}
+        .btn {{
+            padding: 10px 18px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+            min-width: 44px;
+            min-height: 44px;
+        }}
+        .btn-primary {{ background: #667eea; color: white; }}
+        .btn-secondary {{ background: #6c757d; color: white; }}
+        .btn:hover {{ transform: translateY(-1px); }}
+        .btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        .progress-bar {{
+            height: 4px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s;
+        }}
+        .question-container {{ padding: 24px; }}
+        .question-text {{
+            font-size: 16px;
+            margin: 20px 0;
+            line-height: 1.8;
+        }}
+        .question-image {{
+            max-width: 100%;
+            height: auto;
+            margin: 16px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .option {{
+            padding: 14px;
+            margin: 12px 0;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        .option:hover {{ border-color: #667eea; background: #f8f9ff; }}
+        .option.correct {{ border-color: #28a745; background: #d4edda; }}
+        .option.wrong {{ border-color: #dc3545; background: #f8d7da; }}
+        .answer-section {{ margin-top: 24px; padding: 20px; background: #f8f9fa; border-radius: 10px; }}
+        .answer-section.hidden {{ display: none; }}
+        @media (max-width: 768px) {{
+            body {{ padding: 4px; }}
+            .header h1 {{ font-size: 22px; }}
+            .question-container {{ padding: 16px; }}
+            .btn {{ padding: 11px 16px; font-size: 14px; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 {exam_title}</h1>
+            <div>{question_count} Questions | Offline Study Mode</div>
+        </div>
+        <div class="nav">
+            <button class="btn btn-secondary" onclick="prevQuestion()" id="prevBtn">◀ Previous</button>
+            <div id="questionCounter">Question 1 / {question_count}</div>
+            <button class="btn btn-secondary" onclick="nextQuestion()" id="nextBtn">Next ▶</button>
+            <button class="btn btn-primary" onclick="toggleAnswer()" id="toggleBtn">Show Answer</button>
+        </div>
+        <div style="height:4px;background:#e9ecef"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+        <div id="questionsContainer">
+"""
+    
+    # Add each question
+    for idx, q in enumerate(questions):
+        topic_idx = q.get('topic_index', 1)
+        q_idx = q.get('question_index', 1)
+        question_text = q.get('question', 'No question').replace("'", "\\'")
+        choices = q.get('choices', {})
+        suggested_answer = q.get('suggested_answer', q.get('correct_answer', ''))
+        
+        # Build choices HTML
+        choices_html = ""
+        for letter, text in sorted(choices.items()):
+            is_correct = (letter == suggested_answer)
+            choices_html += f'<div class="option" data-option="{letter}" data-correct="{str(is_correct).lower()}" onclick="selectOption(this,{idx})"><b>{letter}.</b> {text}</div>'
+        
+        # Embed images
+        images_html = ""
+        for img_file in q.get('saved_images', []):
+            img_path = DATA_DIR / exam_name / "images" / img_file
+            if img_path.exists():
+                base64_img = image_to_base64(str(img_path))
+                if base64_img:
+                    images_html += f'<img src="{base64_img}" class="question-image">'
+        
+        discussion = q.get('discussion_summary', '')
+        ai_rec = q.get('ai_recommendation', '')
+        
+        html_content += f'''
+        <div class="question-container" id="question{idx}" style="display:{'block' if idx==0 else 'none'}">
+            <h3>Topic {topic_idx} - Question {q_idx}</h3>
+            <div class="question-text">{question_text}</div>
+            {images_html}
+            <div>{choices_html}</div>
+            <div class="answer-section hidden" id="answer{idx}">
+                <h4>✅ Answer: {suggested_answer}</h4>
+                {f"<p><b>💬 Discussion:</b> {discussion}</p>" if discussion else ""}
+                {f"<p><b>🤖 AI:</b> {ai_rec}</p>" if ai_rec else ""}
+            </div>
+        </div>'''
+    
+    # Add JavaScript
+    html_content += f"""
+        </div>
+    </div>
+    <script>
+        let current=0,total={len(questions)},answers={{}},showing=false;
+        function load(){{
+            let s=localStorage.getItem('e_{exam_name.replace(" ","_")}');
+            if(s){{let d=JSON.parse(s);answers=d.a||{{}};current=d.c||0;}}
+            show(current);
+        }}
+        function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:current,a:answers}}));}}
+        function show(i){{
+            document.querySelectorAll('.question-container').forEach(q=>q.style.display='none');
+            document.getElementById('question'+i).style.display='block';
+            document.getElementById('questionCounter').textContent='Question '+(i+1)+' / '+total;
+            document.getElementById('prevBtn').disabled=i===0;
+            document.getElementById('nextBtn').disabled=i===total-1;
+            document.getElementById('progressBar').style.width=((i+1)/total*100)+'%';
+            showing=false;
+            document.getElementById('answer'+i).classList.add('hidden');
+            document.getElementById('toggleBtn').textContent='Show Answer';
+            current=i;save();
+        }}
+        function nextQuestion(){{if(current<total-1)show(current+1);}}
+        function prevQuestion(){{if(current>0)show(current-1);}}
+        function toggleAnswer(){{
+            let a=document.getElementById('answer'+current),b=document.getElementById('toggleBtn');
+            if(showing){{a.classList.add('hidden');b.textContent='Show Answer';}}
+            else{{a.classList.remove('hidden');b.textContent='Hide Answer';}}
+            showing=!showing;
+        }}
+        function selectOption(e,q){{
+            e.parentElement.querySelectorAll('.option').forEach(o=>o.classList.remove('correct','wrong'));
+            let c=e.getAttribute('data-correct')==='true';
+            e.classList.add(c?'correct':'wrong');
+            if(!c)e.parentElement.querySelector('[data-correct="true"]').classList.add('correct');
+            answers[q]=e.getAttribute('data-option');save();
+            setTimeout(()=>{{if(!showing)toggleAnswer();}},500);
+        }}
+        document.addEventListener('keydown',e=>{{
+            if(e.key==='ArrowRight')nextQuestion();
+            else if(e.key==='ArrowLeft')prevQuestion();
+            else if(e.key===' '){{e.preventDefault();toggleAnswer();}}
+        }});
+        window.onload=load;
+    </script>
+</body>
+</html>"""
+    
+    return html_content
+
+
+def generate_and_download_offline(exam_name: str, exam_data: Dict[str, Any]):
+    """Generate offline HTML and provide download button"""
+    try:
+        with st.spinner("📥 Generating offline study file..."):
+            html_content = generate_offline_html(exam_name, exam_data)
+            filename = f"{exam_name.replace(' ', '_')}_offline.html"
+            
+            st.download_button(
+                label="💾 Click to Download Offline File",
+                data=html_content,
+                file_name=filename,
+                mime="text/html",
+                key="download_offline",
+                help="Download this file to study offline on any device"
+            )
+            
+            st.success("✅ Offline study file is ready!")
+            st.info("""
+            📱 **How to use on mobile:**
+            1. Tap download button above
+            2. Open downloaded HTML in browser (Safari/Chrome)
+            3. Study anywhere - no internet needed!
+            4. Your progress saves automatically
+            5. Use arrow keys or tap buttons to navigate
+            """)
+    except Exception as e:
+        st.error(f"❌ Error: {str(e)}")
+
 
 
 def parse_folder_name(folder_name: str) -> Dict[str, int]:
@@ -781,12 +1048,18 @@ def study_exam_page():
     questions = exam_data['questions']
     current_idx = st.session_state.current_question_index
 
-    # Header
-    col1, col2 = st.columns([3, 1])
+    # Header with download button
+    col1, col2, col3 = st.columns([3, 1, 1])
+    
     with col1:
-        st.title(f"📖 {exam_name}")
+        st.title(f"{exam_name}")
+    
     with col2:
-        if st.button("🏠 Exit to Home"):
+        if st.button("📥 Download Offline", use_container_width=True, key="btn_download_offline"):
+            generate_and_download_offline(exam_name, exam_data)
+    
+    with col3:
+        if st.button("⬅️ Back to Home", use_container_width=True):
             st.session_state.current_page = "home"
             st.rerun()
 
