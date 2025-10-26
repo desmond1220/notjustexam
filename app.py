@@ -271,14 +271,23 @@ body{{padding:4px}}
 <div class="question-text">{formatted_text}</div>
 {imgs}
 <div>{opts}</div>
-<div class="answer hidden" id="a{i}">
-<h4>✅ Answer: {ans}</h4>
-{f'<div class="answer-content">{answer_html}</div>' if answer_html else ""}
-{f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>' if disc_html else ""}
-{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>' if ai_html else ""}
-</div>
-</div>'''
-    
+<div class="answer hidden" id="a{i}">'''
+        
+    # If we have HTML answer with detailed content, use that instead of just the letter
+    if answer_html:
+        html += f'<div class="answer-content">{answer_html}</div>'
+    else:
+        # Fallback to simple answer letter if no HTML
+        html += f'<h4>✅ Answer: {ans}</h4>'
+
+    # Add discussion and AI sections
+    if disc_html:
+        html += f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>'
+    if ai_html:
+        html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
+
+    html += '</div>\n</div>\n'
+
     # Add JavaScript
     html += f'''
 </div></div>
