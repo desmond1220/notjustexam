@@ -123,7 +123,55 @@ def image_to_base64(image_path: str) -> str:
 
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
-    """Generate self-contained offline HTML file"""
+    """Generate self-contained HTML file for offline study with proper formatting"""
+    
+    def format_text(text):
+        """Convert text to HTML with proper line breaks and lists"""
+        if not text:
+            return ""
+        
+        # Replace multiple newlines with paragraph breaks
+        text = text.strip()
+        
+        # Split into lines
+        lines = text.split('\n')
+        formatted = []
+        in_list = False
+        
+        for line in lines:
+            stripped = line.strip()
+            
+            if not stripped:
+                # Empty line - close list if open, add paragraph break
+                if in_list:
+                    formatted.append('</ul>')
+                    in_list = False
+                formatted.append('<br>')
+                continue
+            
+            # Check if line is a list item (starts with - or •)
+            if stripped.startswith(('- ', '• ', '* ')):
+                if not in_list:
+                    formatted.append('<ul style="margin:12px 0;padding-left:24px">')
+                    in_list = True
+                
+                # Remove list marker and create list item
+                item_text = stripped[2:].strip()
+                formatted.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
+            else:
+                # Regular text line
+                if in_list:
+                    formatted.append('</ul>')
+                    in_list = False
+                
+                formatted.append(f'<p style="margin:8px 0">{stripped}</p>')
+        
+        # Close list if still open
+        if in_list:
+            formatted.append('</ul>')
+        
+        return ''.join(formatted)
+    
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
     count = len(questions)
@@ -135,26 +183,42 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
 <title>{exam_title} - Offline Study</title>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
-body{{font-family:-apple-system,sans-serif;background:#f5f7fa;padding:8px}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;padding:8px;line-height:1.6}}
 .container{{max-width:900px;margin:0 auto;background:white;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.08)}}
 .header{{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:24px;text-align:center;border-radius:12px 12px 0 0}}
-.nav{{background:#f8f9fa;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:100}}
+.header h1{{font-size:26px;margin-bottom:8px}}
+.nav{{background:#f8f9fa;padding:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;position:sticky;top:0;z-index:100;flex-wrap:wrap}}
 .btn{{padding:10px 18px;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:500;min-width:44px;min-height:44px}}
 .btn-primary{{background:#667eea;color:white}}
 .btn-secondary{{background:#6c757d;color:white}}
+.btn:hover{{opacity:0.9}}
+.btn:disabled{{opacity:0.5;cursor:not-allowed}}
 .progress-bar{{height:4px;background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);transition:width 0.3s}}
 .question{{padding:24px}}
-.option{{padding:14px;margin:12px 0;border:2px solid #e9ecef;border-radius:10px;cursor:pointer}}
+.question h3{{color:#667eea;margin-bottom:16px;font-size:20px}}
+.question-text{{margin:16px 0;line-height:1.8;color:#2c3e50}}
+.question-text p{{margin:12px 0}}
+.question-text ul{{margin:12px 0 12px 24px;padding:0}}
+.question-text li{{margin:8px 0;line-height:1.7}}
+.option{{padding:14px;margin:12px 0;border:2px solid #e9ecef;border-radius:10px;cursor:pointer;transition:all 0.2s}}
 .option:hover{{border-color:#667eea;background:#f8f9ff}}
 .option.correct{{border-color:#28a745;background:#d4edda}}
 .option.wrong{{border-color:#dc3545;background:#f8d7da}}
-.answer{{margin-top:24px;padding:20px;background:#f8f9fa;border-radius:10px}}
+.answer{{margin-top:24px;padding:20px;background:#f8f9fa;border-radius:10px;border-left:4px solid #667eea}}
+.answer h4{{color:#28a745;margin-bottom:16px}}
+.answer-content{{margin:16px 0;padding:16px;background:white;border-radius:8px}}
+.answer-content h5{{color:#2c3e50;margin-bottom:12px;font-size:16px}}
+.answer-content p{{margin:10px 0;line-height:1.7}}
+.answer-content ul{{margin:12px 0 12px 24px}}
+.answer-content li{{margin:8px 0;line-height:1.7}}
 .hidden{{display:none}}
-img{{max-width:100%;height:auto;margin:16px 0;border-radius:8px}}
+img{{max-width:100%;height:auto;margin:16px 0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}}
 @media (max-width:768px){{
 body{{padding:4px}}
 .header h1{{font-size:22px}}
 .question{{padding:16px}}
+.btn{{font-size:14px;padding:10px 14px}}
+#counter{{width:100%;order:-1;margin-bottom:8px;text-align:center}}
 }}
 </style>
 </head>
@@ -178,6 +242,9 @@ body{{padding:4px}}
         choices = q.get('choices', {})
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
         
+        # Format question text
+        formatted_text = format_text(text)
+        
         # Build choices
         opts = ""
         for letter, choice in sorted(choices.items()):
@@ -193,62 +260,22 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Function to format text with proper line breaks and lists
-        def format_text(text):
-            if not text:
-                return ""
-            
-            # Replace newlines with <br> for line breaks
-            text = text.replace('\n', '<br>')
-            
-            # Convert markdown lists to HTML lists
-            lines = text.split('<br>')
-            formatted_lines = []
-            in_list = False
-            
-            for line in lines:
-                stripped = line.strip()
-                # Check if line starts with "- " (markdown list)
-                if stripped.startswith('- '):
-                    if not in_list:
-                        formatted_lines.append('<ul>')
-                        in_list = True
-                    # Remove "- " and wrap in <li>
-                    item = stripped[2:].strip()
-                    formatted_lines.append(f'<li>{item}</li>')
-                else:
-                    if in_list:
-                        formatted_lines.append('</ul>')
-                        in_list = False
-                    if stripped:  # Only add non-empty lines
-                        formatted_lines.append(stripped)
-            
-            # Close list if still open
-            if in_list:
-                formatted_lines.append('</ul>')
-            
-            return '<br>'.join(formatted_lines)
-
-        # Format question text
-        formatted_text = format_text(text)
-
-        # Get discussion and AI recommendation
+        # Format discussion and AI answer
         disc = format_text(q.get('discussion_summary', ''))
         ai = format_text(q.get('ai_recommendation', ''))
-
+        
         html += f'''
-        <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
-        <h3>Topic {topic} - Question {qnum}</h3>
-        <div class="question-text">{formatted_text}</div>
-        {imgs}
-        <div>{opts}</div>
-        <div class="answer hidden" id="a{i}">
-        <h4>✅ Answer: {ans}</h4>
-        {f'<div class="discussion"><b>💬 Discussion:</b><br>{disc}</div>' if disc else ""}
-        {f'<div class="ai-answer"><b>🤖 AI:</b><br>{ai}</div>' if ai else ""}
-        </div>
-        </div>'''
-
+<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
+<h3>Topic {topic} - Question {qnum}</h3>
+<div class="question-text">{formatted_text}</div>
+{imgs}
+<div>{opts}</div>
+<div class="answer hidden" id="a{i}">
+<h4>✅ Answer: {ans}</h4>
+{f'<div class="answer-content"><h5>💬 Discussion</h5>{disc}</div>' if disc else ""}
+{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5>{ai}</div>' if ai else ""}
+</div>
+</div>'''
     
     # Add JavaScript
     html += f'''
@@ -294,6 +321,7 @@ window.onload=load;
 </body></html>'''
     
     return html
+
 
 
 def download_exam_handler(exam_name: str):
