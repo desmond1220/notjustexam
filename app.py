@@ -252,10 +252,13 @@ body{{padding:4px}}
                     imgs += f'<img src="{b64}">'
         
         # Get HTML content and convert images to base64
+        answer_html = q.get('suggested_answer_html', '')
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
 
         # Convert images in HTML to base64 for offline use
+        if answer_html:
+            answer_html = convert_html_images_to_base64(answer_html, exam_name)
         if disc_html:
             disc_html = convert_html_images_to_base64(disc_html, exam_name)
         if ai_html:
@@ -270,8 +273,9 @@ body{{padding:4px}}
 <div>{opts}</div>
 <div class="answer hidden" id="a{i}">
 <h4>✅ Answer: {ans}</h4>
-{f'<div class="answer-content"><h5>💬 Discussion</h5>{disc_html}</div>' if disc_html else ""}
-{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5>{ai_html}</div>' if ai_html else ""}
+{f'<div class="answer-content">{answer_html}</div>' if answer_html else ""}
+{f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>' if disc_html else ""}
+{f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>' if ai_html else ""}
 </div>
 </div>'''
     
@@ -444,6 +448,9 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # Extract suggested answer
         answer_div = soup.find('div', class_='answer')
         if answer_div:
+            # Keep HTML format
+            result['suggested_answer_html'] = str(answer_div)
+
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
