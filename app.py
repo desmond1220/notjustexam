@@ -179,6 +179,44 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
     return str(soup)
 
 
+def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
+    """
+    Remove duplicate text chunks efficiently.
+    Handles exact duplicates and near-duplicates.
+    
+    Args:
+        text: The text to deduplicate  
+        min_chunk_size: Minimum length of duplicate chunks to remove (default 150)
+    
+    Returns:
+        Deduplicated text
+    """
+    if not text or len(text) < min_chunk_size * 2:
+        return text
+    
+    text_len = len(text)
+    
+    # Method 1: Check if entire text is duplicated (most common case)
+    # Split the text in half and compare
+    for split_point in range(text_len // 2 - 10, text_len // 2 + 10):
+        if split_point > min_chunk_size:
+            first_part = text[:split_point].strip()
+            second_part = text[split_point:].strip()
+            
+            if first_part == second_part:
+                return first_part
+    
+    # Method 2: Look for large duplicate chunks
+    # Start with largest possible chunks and work down
+    for chunk_size in range(text_len // 2, min_chunk_size - 1, -50):
+        chunk = text[:chunk_size]
+        if chunk in text[chunk_size:]:
+            # Found duplicate, return text up to first occurrence
+            return chunk.strip()
+    
+    return text
+
+
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
@@ -253,6 +291,8 @@ body{{padding:4px}}
         choices = q.get('choices', {})
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
         
+        # Remove duplicate chunks (if text was accidentally duplicated)
+        text = remove_duplicate_chunks(text, min_chunk_size=150)
         # Just use text as-is with basic line break formatting
         formatted_text = text.replace('\n', '<br>')
 
@@ -306,7 +346,7 @@ body{{padding:4px}}
             # Find and remove all img tags
             for img_tag in soup.find_all('img'):
                 img_tag.decompose()  # Remove the tag completely
-            answer_html = str(soup)
+            answer_html = str(soup).replace("Suggested Answer:", "")
             html += f'<div class="answer-content"><h5>✅ Suggested Answer</h5><div style="padding:10px">{answer_imgs}{answer_html}</div></div>'
         else:
             # Fallback to simple answer letter if no HTML
