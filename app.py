@@ -374,9 +374,11 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # Extract question text
         question_div = soup.find('div', class_='question')
         if question_div:
-            result['question'] = question_div.get_text(separator='\n\n', strip=True)
+            result['question'] = question_div.get_text(separator='\n', strip=True)
+            
+            # Extract images from QUESTION HTML only
             images = question_div.find_all('img')
-            result['images'] = [img.get('src', '') for img in images]
+            result['question_images'] = [img.get('src', '') for img in images]
         
         # Extract choices
         choices = {}
@@ -386,11 +388,13 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             if letter_span:
                 letter = letter_span.get('data-choice-letter', '')
                 choice_text = item.get_text(separator=' ', strip=True)
-                choice_text = choice_text.replace(letter + '.', '', 1).strip()
+                choice_text = choice_text.replace(f"{letter}.", "", 1).strip()
                 choice_text = ' '.join(choice_text.split())
                 choices[letter] = choice_text
+                
                 if 'correct-hidden' in item.get('class', []):
                     result['correct_answer'] = letter
+        
         result['choices'] = choices
         
     elif content_type == 'answer':
@@ -398,9 +402,13 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         answer_div = soup.find('div', class_='answer')
         if answer_div:
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
-            match = re.search(r'Suggested Answer:\s*([A-Z])', suggested_answer_text)
+            match = re.search(r'Suggested Answer[:\s]+([A-Z])', suggested_answer_text)
             if match:
                 result['suggested_answer'] = match.group(1)
+            
+            # Extract images from ANSWER HTML only  
+            images = answer_div.find_all('img')
+            result['answer_images'] = [img.get('src', '') for img in images]
         
         # Extract discussion summary
         discussion_div = soup.find('div', class_='discussion-summary')
@@ -408,8 +416,9 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             header = discussion_div.find('h3')
             if header:
                 header.decompose()
-            text = discussion_div.get_text(separator=' ', strip=True)
-            text = ' '.join(text.split())
+            
+            text = discussion_div.get_text(separator='\n', strip=True)
+            text = '\n'.join(text.split())
             result['discussion_summary'] = text
         
         # Extract AI recommendation
@@ -432,20 +441,19 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         item_text = li.get_text(separator=' ', strip=True)
                         item_text = ' '.join(item_text.split())
                         if item_text:
-                            # Use Markdown list syntax instead of bullet character
                             ul_items.append(f"- {item_text}")
+                    
                     if ul_items:
                         ul_text = '\n'.join(ul_items)
-                    # Remove UL from paragraph
+                    
                     nested_ul.decompose()
                 
-                # Now get paragraph text (with UL removed)
-                para_text = main_p.get_text(separator=' ', strip=True)
-                para_text = ' '.join(para_text.split())
+                # Now get paragraph text
+                para_text = main_p.get_text(separator='\n', strip=True)
+                para_text = '\n'.join(para_text.split())
                 
-                # Combine with proper formatting
                 if ul_text:
-                    full_text = f"{para_text}\n\n{ul_text}"
+                    full_text = f"{para_text}\n{ul_text}"
                 else:
                     full_text = para_text
                 
@@ -606,19 +614,39 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
                 answer_content = extract_html_content(content, 'answer')
                 question_data.update(answer_content)
 
-            # Save images
+            # Save images - NOW SEPARATE THEM
             image_files = [f for f in files.keys() if f.startswith('image_') and f.endswith(('.png', '.jpg', '.jpeg'))]
             if image_files:
                 exam_images_dir = DATA_DIR / exam_name / "images"
                 exam_images_dir.mkdir(parents=True, exist_ok=True)
-
+                
+                # Save all image files
                 saved_images = []
                 for img_file in image_files:
                     img_path = exam_images_dir / f"{folder_name}_{img_file}"
+                    content = files[img_file].read() if hasattr(files[img_file], 'read') else files[img_file]
                     with open(img_path, 'wb') as f:
-                        f.write(files[img_file])
+                        f.write(content)
                     saved_images.append(f"{folder_name}_{img_file}")
-                question_data['saved_images'] = saved_images
+                
+                # Determine which images are for question vs answer based on extracted image references
+                question_images = []
+                answer_images = []
+                
+                # If we have image references from HTML, use those to determine placement
+                question_img_refs = question_data.get('question_images', [])
+                answer_img_refs = question_data.get('answer_images', [])
+                
+                for img_file in saved_images:
+                    # Check if image is referenced in question or answer HTML
+                    # If no explicit reference, put in question by default for backward compatibility
+                    if any(ref in img_file for ref in question_img_refs) or not answer_img_refs:
+                        question_images.append(img_file)
+                    if any(ref in img_file for ref in answer_img_refs):
+                        answer_images.append(img_file)
+                
+                question_data['saved_images'] = question_images
+                question_data['answer_images'] = answer_images
 
             questions.append(question_data)
 
@@ -1083,15 +1111,22 @@ def study_exam_page():
         st.markdown("### Question")
         st.markdown(question.get('question', 'No question text available'))
 
-        # Display images if available
-        if 'saved_images' in question and question['saved_images']:
-            st.markdown("### 📷 Images")
-            img_cols = st.columns(min(len(question['saved_images']), 3))
-            for idx, img_file in enumerate(question['saved_images']):
-                img_path = DATA_DIR / exam_name / "images" / img_file
+        # # Display images if available
+        # if 'saved_images' in question and question['saved_images']:
+        #     st.markdown("### 📷 Images")
+        #     img_cols = st.columns(min(len(question['saved_images']), 3))
+        #     for idx, img_file in enumerate(question['saved_images']):
+        #         img_path = DATA_DIR / exam_name / "images" / img_file
+        #         if img_path.exists():
+        #             with img_cols[idx % 3]:
+        #                 st.image(str(img_path), use_container_width=True)
+
+        # Display question images only
+        if question.get('saved_images'):
+            for img_file in question['saved_images']:
+                img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
                 if img_path.exists():
-                    with img_cols[idx % 3]:
-                        st.image(str(img_path), use_container_width=True)
+                    st.image(str(img_path))
 
         # Choices
         if 'choices' in question and question['choices']:
@@ -1121,7 +1156,15 @@ def study_exam_page():
 
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
-        st.markdown("### Answer Section")
+        with st.container():
+            st.markdown("### ✅ Answer")
+            
+            # Show answer images only here
+            if question.get('answer_images'):
+                for img_file in question['answer_images']:
+                    img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
+                    if img_path.exists():
+                        st.image(str(img_path))
 
         # Suggested Answer
         if 'suggested_answer' in question or 'correct_answer' in question:
