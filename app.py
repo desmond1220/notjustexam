@@ -286,11 +286,10 @@ body{{padding:4px}}
     if ai_html:
         html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
 
-    # html += '</div>\n</div>\n'
+    html += '</div>\n</div>\n'
 
     # Add JavaScript
     html += f'''
-</div></div>
 <script>
 let c=0,t={count},ans={{}},s=false;
 function load(){{let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}show(c)}}
