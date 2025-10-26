@@ -181,7 +181,8 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
 
 def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
     """
-    Remove duplicate text chunks - GUARANTEED TO WORK version.
+    Remove duplicate text chunks from question text.
+    Handles cases where text is duplicated but has additional content after.
     
     Args:
         text: The text to deduplicate
@@ -190,55 +191,74 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
     Returns:
         Deduplicated text
     """
-    if not text or len(text) < min_chunk_size * 2:
+    if not text or len(text) < min_chunk_size:
         return text
     
+    # METHOD 1: Find repeating question markers
+    # Common markers that indicate duplicate questions
+    markers = [
+        "You have the following",
+        "HOTSPOT -",
+        "DRAG DROP -",
+        "SIMULATION -",
+        "You need to",
+        "What should you"
+    ]
+    
+    for marker in markers:
+        if marker not in text:
+            continue
+            
+        # Find all occurrences of this marker
+        positions = []
+        start = 0
+        while True:
+            pos = text.find(marker, start)
+            if pos == -1:
+                break
+            positions.append(pos)
+            start = pos + len(marker)
+        
+        # If we found 2+ occurrences, we likely have a duplicate
+        if len(positions) >= 2:
+            first_pos = positions[0]
+            second_pos = positions[1]
+            
+            # Extract the chunk between first and second occurrence
+            chunk_between = text[first_pos:second_pos].strip()
+            
+            # If this chunk is substantial, assume duplication
+            if len(chunk_between) >= min_chunk_size:
+                # Return everything from start to second occurrence
+                return text[:second_pos].strip()
+    
+    # METHOD 2: Check for 50/50 duplicates
     text_len = len(text)
     mid = text_len // 2
     
-    # METHOD 1: Exact midpoint check (most common case)
-    # Check if first half == second half
-    first_half = text[:mid].strip()
-    second_half = text[mid:].strip()
-    
-    if first_half == second_half and len(first_half) >= min_chunk_size:
-        print(f"✅ Found exact 50/50 duplicate at position {mid}")
-        return first_half
-    
-    # Handle case where midpoint is off by 1 (odd length)
-    if text_len % 2 == 1:
-        mid2 = mid + 1
-        first_half2 = text[:mid2].strip()
-        second_half2 = text[mid2:].strip()
-        
-        if first_half2 == second_half2 and len(first_half2) >= min_chunk_size:
-            print(f"✅ Found exact 50/50 duplicate at position {mid2}")
-            return first_half2
-    
-    # METHOD 2: Check around midpoint with tolerance for whitespace
-    for offset in range(-20, 21):
+    for offset in range(-50, 51):
         split_point = mid + offset
         if split_point < min_chunk_size or split_point > text_len - min_chunk_size:
             continue
         
-        part1 = text[:split_point].strip()
-        part2 = text[split_point:].strip()
+        first_half = text[:split_point].strip()
+        second_half = text[split_point:].strip()
         
-        if part1 == part2 and len(part1) >= min_chunk_size:
-            print(f"✅ Found duplicate at split point {split_point}")
-            return part1
+        if first_half == second_half and len(first_half) >= min_chunk_size:
+            return first_half
     
-    # METHOD 3: Find any repeating large substring
-    # Take first 70% of text and see if it appears again
-    for chunk_size in range(int(text_len * 0.7), min_chunk_size, -50):
-        chunk = text[:chunk_size].strip()
-        remaining = text[chunk_size:].strip()
-        
-        if chunk == remaining:
-            print(f"✅ Found duplicate chunk of size {chunk_size}")
-            return chunk
+    # METHOD 3: Sliding window for large duplicates
+    # Look for any large chunk that repeats
+    for chunk_size in range(int(text_len * 0.4), min_chunk_size, -30):
+        for start in range(0, min(200, text_len - chunk_size)):
+            chunk = text[start:start + chunk_size]
+            # Find if this chunk appears later
+            next_pos = text.find(chunk, start + chunk_size)
+            
+            if next_pos != -1 and (next_pos - start) >= min_chunk_size:
+                # Found duplicate - return text up to second occurrence
+                return text[:next_pos].strip()
     
-    print("❌ No duplicates found")
     return text
 
 
