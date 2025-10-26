@@ -45,6 +45,30 @@ st.markdown("""
         margin: 20px 0;
         background-color: white;
     }
+    .question-text {
+        line-height: 1.8;
+        margin: 16px 0;
+    }
+    .question-text ul {
+        margin: 12px 0;
+        padding-left: 24px;
+    }
+    .question-text li {
+        margin: 8px 0;
+        line-height: 1.6;
+    }
+    .discussion, .ai-answer {
+        margin: 16px 0;
+        line-height: 1.7;
+    }
+    .discussion ul, .ai-answer ul {
+        margin: 12px 0 12px 20px;
+        padding-left: 0;
+    }
+    .discussion li, .ai-answer li {
+        margin: 8px 0;
+        list-style-type: disc;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -169,21 +193,62 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        disc = q.get('discussion_summary', '')
-        ai = q.get('ai_recommendation', '')
-        
+        # Function to format text with proper line breaks and lists
+        def format_text(text):
+            if not text:
+                return ""
+            
+            # Replace newlines with <br> for line breaks
+            text = text.replace('\n', '<br>')
+            
+            # Convert markdown lists to HTML lists
+            lines = text.split('<br>')
+            formatted_lines = []
+            in_list = False
+            
+            for line in lines:
+                stripped = line.strip()
+                # Check if line starts with "- " (markdown list)
+                if stripped.startswith('- '):
+                    if not in_list:
+                        formatted_lines.append('<ul>')
+                        in_list = True
+                    # Remove "- " and wrap in <li>
+                    item = stripped[2:].strip()
+                    formatted_lines.append(f'<li>{item}</li>')
+                else:
+                    if in_list:
+                        formatted_lines.append('</ul>')
+                        in_list = False
+                    if stripped:  # Only add non-empty lines
+                        formatted_lines.append(stripped)
+            
+            # Close list if still open
+            if in_list:
+                formatted_lines.append('</ul>')
+            
+            return '<br>'.join(formatted_lines)
+
+        # Format question text
+        formatted_text = format_text(text)
+
+        # Get discussion and AI recommendation
+        disc = format_text(q.get('discussion_summary', ''))
+        ai = format_text(q.get('ai_recommendation', ''))
+
         html += f'''
-<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
-<h3>Topic {topic} - Question {qnum}</h3>
-<p>{text}</p>
-{imgs}
-<div>{opts}</div>
-<div class="answer hidden" id="a{i}">
-<h4>✅ Answer: {ans}</h4>
-{f"<p><b>💬 Discussion:</b> {disc}</p>" if disc else ""}
-{f"<p><b>🤖 AI:</b> {ai}</p>" if ai else ""}
-</div>
-</div>'''
+        <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
+        <h3>Topic {topic} - Question {qnum}</h3>
+        <div class="question-text">{formatted_text}</div>
+        {imgs}
+        <div>{opts}</div>
+        <div class="answer hidden" id="a{i}">
+        <h4>✅ Answer: {ans}</h4>
+        {f'<div class="discussion"><b>💬 Discussion:</b><br>{disc}</div>' if disc else ""}
+        {f'<div class="ai-answer"><b>🤖 AI:</b><br>{ai}</div>' if ai else ""}
+        </div>
+        </div>'''
+
     
     # Add JavaScript
     html += f'''
