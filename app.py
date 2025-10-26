@@ -688,6 +688,7 @@ def home_page():
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_{exam_name}", use_container_width=True):
                             if delete_exam(exam_name):
+                                # Remove from authenticated list if present
                                 if exam_name in st.session_state.get('authenticated_exams', []):
                                     st.session_state.authenticated_exams.remove(exam_name)
                                 st.success(f"Deleted exam: {exam_name}")
@@ -695,10 +696,11 @@ def home_page():
                             else:
                                 st.error("Failed to delete exam")
 
-                    # ADD THIS NEW SECTION FOR DOWNLOAD
-                    with st.container():
-                        if st.button("📥 Download Offline", key=f"download_{exam_name}", use_container_width=True):
-                            download_exam_handler(exam_name)
+                    # ADD DOWNLOAD BUTTON - Only show if exam is unlocked or not protected
+                    if not is_protected or is_authenticated:
+                        with st.container():
+                            if st.button("📥 Download Offline", key=f"download_{exam_name}", use_container_width=True):
+                                download_exam_handler(exam_name)
 
                     st.markdown("---")
 
