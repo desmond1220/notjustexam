@@ -267,7 +267,7 @@ body{{padding:4px}}
         # else:
         #     opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
 
-        # Embed images
+        # Embed question images directly
         imgs = ""
         for img_file in q.get('saved_images', []):
             img_path = DATA_DIR / exam_name / "images" / img_file
@@ -276,28 +276,40 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Get HTML content and convert images to base64
+        # Get HTML content
         answer_html = q.get('suggested_answer_html', '')
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
-
-        # Construct the folder prefix for this question to find correct images
-        # Use stored folder_name or reconstruct from topic and question_num
+        
+        # Embed answer images directly using the same mechanism as questions
+        # Extract and convert all images that belong to this question's answers
+        answer_imgs = ""
+        
+        # Get all answer-related images for this question
+        # The folder prefix tells us which images belong to this question
         folder_prefix = q.get('folder_name', '')
         if not folder_prefix:
-            # Reconstruct from topic and question number
-            topic = q.get('topic', '')
-            qnum = q.get('question_num', '')
-            if topic and qnum:
-                folder_prefix = f"topic_{topic}_question_{qnum}"
-
-        # Convert images in HTML to base64 for offline use (pass folder prefix)
-        if answer_html:
-            answer_html = convert_html_images_to_base64(answer_html, exam_name, folder_prefix)
-        if disc_html:
-            disc_html = convert_html_images_to_base64(disc_html, exam_name, folder_prefix)
-        if ai_html:
-            ai_html = convert_html_images_to_base64(ai_html, exam_name, folder_prefix)
+            topic_val = q.get('topic', '')
+            qnum_val = q.get('question_num', '')
+            if topic_val and qnum_val:
+                folder_prefix = f"topic_{topic_val}_question_{qnum_val}"
+        
+        if folder_prefix:
+            # Find all images with this folder prefix
+            images_dir = DATA_DIR / exam_name / "images"
+            if images_dir.exists():
+                for img_path in images_dir.glob(f"{folder_prefix}_image_*"):
+                    # Skip if already in question images
+                    if img_path.name not in q.get('saved_images', []):
+                        b64 = image_to_base64(str(img_path))
+                        if b64:
+                            answer_imgs += f'<img src="{b64}">'
+        
+        # Now embed the answer images directly in the answer HTML sections
+        # by replacing image tags with base64 versions
+        if answer_imgs and answer_html:
+            # Insert answer images at the beginning of answer HTML
+            answer_html = answer_imgs + answer_html
 
 
         html += f'''
