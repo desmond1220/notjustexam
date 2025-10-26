@@ -1278,16 +1278,16 @@ def study_exam_page():
         # Convert to HTML with line breaks
         question_html = question_text.replace('\n', '<br>')
         
-        # Display question with styled HTML (matching answer section)
+        # Display question with clean styled HTML (white background, colored border)
         styled_question = f"""
         <div class="question-text" style="
             padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 12px;
+            background: white;
+            border-left: 4px solid #667eea;
+            border-radius: 8px;
             margin: 16px 0;
             line-height: 1.8;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
         ">
             {question_html}
         </div>
@@ -1316,10 +1316,10 @@ def study_exam_page():
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
-                        border: 3px solid #28a745;
+                        border: 2px solid #28a745;
                         border-radius: 10px;
-                        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-                        box-shadow: 0 2px 4px rgba(40,167,69,0.2);
+                        background: white;
+                        box-shadow: 0 2px 4px rgba(40,167,69,0.15);
                     ">
                         <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
                         <span style="color: #155724;">{text}</span> 
@@ -1337,7 +1337,7 @@ def study_exam_page():
                         border-radius: 10px;
                         background: white;
                         transition: all 0.3s;
-                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                     ">
                         <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
                         <span style="color: #495057;">{text}</span>
