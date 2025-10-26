@@ -1271,20 +1271,28 @@ def study_exam_page():
 
     # Question content
     with st.container():
-        # st.markdown('<div class="question-container">', unsafe_allow_html=True)
-
-        # st.markdown("### Question")
-        st.markdown(remove_duplicate_chunks(question.get('question', 'No question text available')))
-
-        # # Display images if available
-        # if 'saved_images' in question and question['saved_images']:
-        #     st.markdown("### 📷 Images")
-        #     img_cols = st.columns(min(len(question['saved_images']), 3))
-        #     for idx, img_file in enumerate(question['saved_images']):
-        #         img_path = DATA_DIR / exam_name / "images" / img_file
-        #         if img_path.exists():
-        #             with img_cols[idx % 3]:
-        #                 st.image(str(img_path), use_container_width=True)
+        # Get and deduplicate question text
+        question_text = question.get('question', 'No question text available')
+        question_text = remove_duplicate_chunks(question_text)
+        
+        # Convert to HTML with line breaks
+        question_html = question_text.replace('\n', '<br>')
+        
+        # Display question with styled HTML (matching answer section)
+        styled_question = f"""
+        <div class="question-text" style="
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            margin: 16px 0;
+            line-height: 1.8;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+            {question_html}
+        </div>
+        """
+        st.markdown(styled_question, unsafe_allow_html=True)
 
         # Display question images only
         if question.get('saved_images'):
@@ -1293,29 +1301,58 @@ def study_exam_page():
                 if img_path.exists():
                     st.image(str(img_path))
 
-        # Display answer choices if they exist
+        # Display answer choices if they exist with HTML styling
         if question.get('choices'):
             st.markdown("### Answer Options:")
+            
+            # Create styled options HTML
             for letter, text in sorted(question['choices'].items()):
                 is_correct = (letter == question.get('suggested_answer', '') or 
                             letter == question.get('correct_answer', ''))
                 
+                # Show correct answer with green styling when answer is shown
                 if st.session_state.show_answer.get(current_idx, False) and is_correct:
-                    st.success(f"**{letter}.** {text} ✓")
+                    option_html = f"""
+                    <div style="
+                        padding: 16px;
+                        margin: 12px 0;
+                        border: 3px solid #28a745;
+                        border-radius: 10px;
+                        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+                        box-shadow: 0 2px 4px rgba(40,167,69,0.2);
+                    ">
+                        <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #155724;">{text}</span> 
+                        <strong style="color: #28a745; float: right;">✓</strong>
+                    </div>
+                    """
+                    st.markdown(option_html, unsafe_allow_html=True)
                 else:
-                    st.info(f"**{letter}.** {text}")
+                    # Regular option styling
+                    option_html = f"""
+                    <div style="
+                        padding: 16px;
+                        margin: 12px 0;
+                        border: 2px solid #e9ecef;
+                        border-radius: 10px;
+                        background: white;
+                        transition: all 0.3s;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    ">
+                        <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #495057;">{text}</span>
+                    </div>
+                    """
+                    st.markdown(option_html, unsafe_allow_html=True)
+                    
         elif question.get('question_type') == 'hotspot':
             # For HOTSPOT questions, show prompt if available
             if question.get('hotspot_prompt'):
                 st.info(f"📝 {question['hotspot_prompt']}")
-            # st.warning("⚠️ This is a HOTSPOT/Hot Area question. Click 'Show Answer' to see the solution.")
-        # else:
-        #     st.warning("⚠️ No answer options available. This may be a fill-in or hotspot question.")
-
-        # st.markdown('</div>', unsafe_allow_html=True)
 
     # Show answer section
     st.markdown("---")
+
 
     if question_id not in st.session_state.show_answer:
         st.session_state.show_answer[question_id] = False
