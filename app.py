@@ -130,47 +130,38 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
         if not text:
             return ""
         
-        # Replace multiple newlines with paragraph breaks
-        text = text.strip()
+        # Split into paragraphs (double newlines = paragraph break)
+        paragraphs = text.split('\n\n')
+        formatted_parts = []
         
-        # Split into lines
-        lines = text.split('\n')
-        formatted = []
-        in_list = False
-        
-        for line in lines:
-            stripped = line.strip()
-            
-            if not stripped:
-                # Empty line - close list if open, add paragraph break
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                formatted.append('<br>')
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if not paragraph:
                 continue
             
-            # Check if line is a list item (starts with - or •)
-            if stripped.startswith(('- ', '• ', '* ')):
-                if not in_list:
-                    formatted.append('<ul style="margin:12px 0;padding-left:24px">')
-                    in_list = True
-                
-                # Remove list marker and create list item
-                item_text = stripped[2:].strip()
-                formatted.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
+            # Split paragraph into lines
+            lines = paragraph.split('\n')
+            
+            # Check if this paragraph is a list
+            is_list = all(line.strip().startswith(('- ', '• ', '* ')) for line in lines if line.strip())
+            
+            if is_list and len(lines) > 1:
+                # This is a list - create UL
+                formatted_parts.append('<ul style="margin:12px 0;padding-left:24px">')
+                for line in lines:
+                    stripped = line.strip()
+                    if stripped:
+                        # Remove list marker
+                        item_text = stripped.lstrip('-•* ').strip()
+                        formatted_parts.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
+                formatted_parts.append('</ul>')
             else:
-                # Regular text line
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                
-                formatted.append(f'<p style="margin:8px 0">{stripped}</p>')
+                # Regular paragraph - join lines with spaces
+                paragraph_text = ' '.join(line.strip() for line in lines if line.strip())
+                if paragraph_text:
+                    formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{paragraph_text}</p>')
         
-        # Close list if still open
-        if in_list:
-            formatted.append('</ul>')
-        
-        return ''.join(formatted)
+        return ''.join(formatted_parts)
     
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
@@ -197,7 +188,7 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 .question{{padding:24px}}
 .question h3{{color:#667eea;margin-bottom:16px;font-size:20px}}
 .question-text{{margin:16px 0;line-height:1.8;color:#2c3e50}}
-.question-text p{{margin:12px 0}}
+.question-text p{{margin:12px 0;line-height:1.7}}
 .question-text ul{{margin:12px 0 12px 24px;padding:0}}
 .question-text li{{margin:8px 0;line-height:1.7}}
 .option{{padding:14px;margin:12px 0;border:2px solid #e9ecef;border-radius:10px;cursor:pointer;transition:all 0.2s}}
@@ -251,12 +242,10 @@ body{{padding:4px}}
             for letter, choice in sorted(choices.items()):
                 correct = "true" if letter == ans else "false"
                 opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
-        elif q.get('question_type') == 'hotspot':
-            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
         else:
-            opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
-
-        # Embed images
+            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ No standard answer options for this question. See answer for details.</div>'
+        
+        # Embed images (question images only)
         imgs = ""
         for img_file in q.get('saved_images', []):
             img_path = DATA_DIR / exam_name / "images" / img_file
@@ -282,7 +271,7 @@ body{{padding:4px}}
 </div>
 </div>'''
     
-    # Add JavaScript
+    # Add JavaScript (same as before)
     html += f'''
 </div></div>
 <script>
@@ -326,6 +315,7 @@ window.onload=load;
 </body></html>'''
     
     return html
+
 
 
 
