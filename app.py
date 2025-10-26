@@ -302,7 +302,8 @@ body{{padding:4px}}
         
         # If we have HTML answer with detailed content, use that instead of just the letter
         if answer_html:
-            html += f'<div class="answer-content">{answer_imgs}{answer_html}</div>'
+            # Don't wrap in answer-content div - answer_html already has proper structure
+            html += f'{answer_imgs}{answer_html}'
         else:
             # Fallback to simple answer letter if no HTML
             html += f'<h4>✅ Answer: {ans}</h4>'
