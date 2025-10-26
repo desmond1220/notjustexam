@@ -266,7 +266,7 @@ body{{padding:4px}}
         #     opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
         # else:
         #     opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
-        
+
         # Embed question images (same as Streamlit)
         imgs = ""
         for img_file in q.get('saved_images', []):
@@ -276,8 +276,17 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Get HTML content - answer_html already contains images embedded
-        # DO NOT add answer_images separately as they're already in the HTML
+        # Embed answer images (same mechanism as Streamlit - use answer_images)
+        answer_imgs = ""
+        if q.get('answer_images'):
+            for img_file in q['answer_images']:
+                img_path = DATA_DIR / exam_name / "images" / img_file
+                if img_path.exists():
+                    b64 = image_to_base64(str(img_path))
+                    if b64:
+                        answer_imgs += f'<img src="{b64}">'
+        
+        # Get HTML content (no conversion needed - images are separate)
         answer_html = q.get('suggested_answer_html', '')
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
@@ -293,8 +302,8 @@ body{{padding:4px}}
         
         # If we have HTML answer with detailed content, use that instead of just the letter
         if answer_html:
-            # answer_html already contains everything: images, borders, formatting
-            html += answer_html
+            # Don't wrap in answer-content div - answer_html already has proper structure
+            html += f'{answer_imgs}{answer_html}'
         else:
             # Fallback to simple answer letter if no HTML
             html += f'<h4>✅ Answer: {ans}</h4>'
@@ -477,7 +486,8 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         answer_div = soup.find('div', class_='answer')
         if answer_div:
             # Keep HTML format
-            result['suggested_answer_html'] = str(answer_div)
+            answer_html = answer_div.decode_contents()  # Gets content WITHOUT the div wrapper
+            result['suggested_answer_html'] = str(answer_html)
 
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
