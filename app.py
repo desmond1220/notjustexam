@@ -348,6 +348,9 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         
         if choice_items:
             for item in choice_items:
+                letter = None
+                choice_text = None
+                
                 # Try Format 1: <span class="multi-choice-letter" data-choice-letter="A">
                 letter_span = item.find('span', class_='multi-choice-letter')
                 if letter_span:
@@ -373,9 +376,21 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         
                         if letter and choice_text:
                             choices[letter] = choice_text
+                    else:
+                        # Try Format 3: No span, letter is direct text (e.g., "A. Choice text")
+                        full_text = item.get_text(separator=' ', strip=True)
+                        # Match pattern: "A. text" or "A. text"
+                        match = re.match(r'^([A-Z])\.\s*(.*)', full_text)
+                        if match:
+                            letter = match.group(1)
+                            choice_text = match.group(2).strip()
+                            choice_text = ' '.join(choice_text.split())
+                            if letter and choice_text:
+                                choices[letter] = choice_text
                 
                 # Check if this is the correct answer
-                if 'correct-hidden' in item.get('class', []):
+                if 'correct-hidden' in item.get('class', []) and letter:
+                    correct_answer = letter
                     # Get the letter for this item
                     if letter_span:
                         correct_answer = letter_span.get('data-choice-letter', '')
