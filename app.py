@@ -126,51 +126,63 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
     def format_text(text):
-        """Convert text to HTML with proper line breaks and lists"""
+        """Convert text to HTML with proper line breaks and lists - handles natural paragraphs"""
         if not text:
             return ""
         
-        # Replace multiple newlines with paragraph breaks
-        text = text.strip()
+        # First, normalize the text - replace multiple spaces with single space
+        text = re.sub(r'  +', ' ', text)
         
-        # Split into lines
+        # Split by double newlines (actual paragraph breaks) OR specific patterns
+        # Patterns that indicate new paragraphs:
+        # 1. Lines starting with "A." "B." "Why not" etc.
+        # 2. Double newlines
+        # 3. Sentences ending with period followed by capital letter line
+        
         lines = text.split('\n')
-        formatted = []
-        in_list = False
+        paragraphs = []
+        current_para = []
         
         for line in lines:
             stripped = line.strip()
-            
             if not stripped:
-                # Empty line - close list if open, add paragraph break
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                formatted.append('<br>')
+                # Empty line = paragraph break
+                if current_para:
+                    paragraphs.append(' '.join(current_para))
+                    current_para = []
                 continue
             
-            # Check if line is a list item (starts with - or •)
-            if stripped.startswith(('- ', '• ', '* ')):
-                if not in_list:
-                    formatted.append('<ul style="margin:12px 0;padding-left:24px">')
-                    in_list = True
-                
-                # Remove list marker and create list item
-                item_text = stripped[2:].strip()
-                formatted.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
+            # Check if this line starts a new section (A., B., Why not, etc.)
+            is_new_section = bool(re.match(r'^([A-Z]\.|\*\*[A-Z]\.|\*\*Why|Why not|Suggested Answer:|I agree)', stripped))
+            
+            if is_new_section and current_para:
+                # Save previous paragraph and start new one
+                paragraphs.append(' '.join(current_para))
+                current_para = [stripped]
             else:
-                # Regular text line
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                
-                formatted.append(f'<p style="margin:8px 0">{stripped}</p>')
+                current_para.append(stripped)
         
-        # Close list if still open
-        if in_list:
-            formatted.append('</ul>')
+        # Don't forget the last paragraph
+        if current_para:
+            paragraphs.append(' '.join(current_para))
         
-        return ''.join(formatted)
+        # Now format each paragraph
+        formatted_parts = []
+        for para in paragraphs:
+            para = para.strip()
+            if not para:
+                continue
+            
+            # Check if this is a list item
+            if para.startswith(('- ', '• ', '* ')):
+                # Single list item
+                item_text = para.lstrip('-•* ').strip()
+                formatted_parts.append(f'<ul style="margin:12px 0;padding-left:24px"><li style="margin:8px 0;line-height:1.6">{item_text}</li></ul>')
+            else:
+                # Regular paragraph
+                formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{para}</p>')
+        
+        return ''.join(formatted_parts)
     
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
