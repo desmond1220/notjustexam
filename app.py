@@ -130,52 +130,68 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
         if not text:
             return ""
         
-        # First, normalize the text - replace multiple spaces with single space
-        text = re.sub(r'  +', ' ', text)
+        # Remove header if present
+        if text.startswith('AI Recommended Answer'):
+            text = text.replace('AI Recommended Answer', '', 1).strip()
         
-        # Split by double newlines (actual paragraph breaks) OR specific patterns
-        # Patterns that indicate new paragraphs:
-        # 1. Lines starting with "A." "B." "Why not" etc.
-        # 2. Double newlines
-        # 3. Sentences ending with period followed by capital letter line
-        
+        # First normalize: fix broken sentences by detecting sentence fragments
         lines = text.split('\n')
+        fixed_lines = []
+        
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            if not stripped:
+                fixed_lines.append('')
+                continue
+            
+            # If line is very short (< 20 chars) and doesn't end with punctuation or colon,
+            # it's probably a sentence fragment - merge with next line
+            if len(stripped) < 20 and not stripped.endswith(('.', ':', '!', '?')) and i < len(lines) - 1:
+                # Don't merge if next line starts a new section
+                next_line = lines[i + 1].strip() if i + 1 < len(lines) else ''
+                if not re.match(r'^([A-Z]\.|\*\*[A-Z]\.|Why|Reasoning:|Suggested)', next_line):
+                    # Merge this line with previous or next
+                    if fixed_lines and not fixed_lines[-1].endswith((':','')):
+                        fixed_lines[-1] = fixed_lines[-1] + ' ' + stripped
+                        continue
+            
+            fixed_lines.append(stripped)
+        
+        # Now process into paragraphs
         paragraphs = []
         current_para = []
         
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
+        for line in fixed_lines:
+            if not line:
                 # Empty line = paragraph break
                 if current_para:
                     paragraphs.append(' '.join(current_para))
                     current_para = []
                 continue
             
-            # Check if this line starts a new section (A., B., Why not, etc.)
-            is_new_section = bool(re.match(r'^([A-Z]\.|\*\*[A-Z]\.|\*\*Why|Why not|Suggested Answer:|I agree)', stripped))
+            # Check if line starts a new section
+            is_new_section = bool(re.match(r'^([A-Z]\.|\*\*[A-Z]\.|Why|Reasoning:|Suggested Answer:)', line))
             
             if is_new_section and current_para:
                 # Save previous paragraph and start new one
                 paragraphs.append(' '.join(current_para))
-                current_para = [stripped]
+                current_para = [line]
             else:
-                current_para.append(stripped)
+                current_para.append(line)
         
-        # Don't forget the last paragraph
+        # Don't forget last paragraph
         if current_para:
             paragraphs.append(' '.join(current_para))
         
-        # Now format each paragraph
+        # Format each paragraph as HTML
         formatted_parts = []
         for para in paragraphs:
             para = para.strip()
             if not para:
                 continue
             
-            # Check if this is a list item
+            # Single list item check
             if para.startswith(('- ', '• ', '* ')):
-                # Single list item
                 item_text = para.lstrip('-•* ').strip()
                 formatted_parts.append(f'<ul style="margin:12px 0;padding-left:24px"><li style="margin:8px 0;line-height:1.6">{item_text}</li></ul>')
             else:
@@ -183,6 +199,7 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
                 formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{para}</p>')
         
         return ''.join(formatted_parts)
+
     
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
