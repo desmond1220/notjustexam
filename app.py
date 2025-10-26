@@ -125,52 +125,6 @@ def image_to_base64(image_path: str) -> str:
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
-    def format_text(text):
-        """Convert text to HTML with proper line breaks and lists"""
-        if not text:
-            return ""
-        
-        # Replace multiple newlines with paragraph breaks
-        text = text.strip()
-        
-        # Split into lines
-        lines = text.split('\n')
-        formatted = []
-        in_list = False
-        
-        for line in lines:
-            stripped = line.strip()
-            
-            if not stripped:
-                # Empty line - close list if open, add paragraph break
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                formatted.append('<br>')
-                continue
-            
-            # Check if line is a list item (starts with - or •)
-            if stripped.startswith(('- ', '• ', '* ')):
-                if not in_list:
-                    formatted.append('<ul style="margin:12px 0;padding-left:24px">')
-                    in_list = True
-                
-                # Remove list marker and create list item
-                item_text = stripped[2:].strip()
-                formatted.append(f'<li style="margin:8px 0;line-height:1.6">{item_text}</li>')
-            else:
-                # Regular text line
-                if in_list:
-                    formatted.append('</ul>')
-                    in_list = False
-                
-                formatted.append(f'<p style="margin:8px 0">{stripped}</p>')
-        
-        # Close list if still open
-        if in_list:
-            formatted.append('</ul>')
-        
-        return ''.join(formatted)
     
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
@@ -242,9 +196,9 @@ body{{padding:4px}}
         choices = q.get('choices', {})
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
         
-        # Format question text
-        formatted_text = format_text(text)
-        
+        # Just use text as-is with basic line break formatting
+        formatted_text = text.replace('\n', '<br>')
+
         # Build choices
         opts = ""
         if choices:
@@ -265,9 +219,17 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Format discussion and AI answer
-        disc = format_text(q.get('discussion_summary', ''))
-        ai = format_text(q.get('ai_recommendation', ''))
+        # Get HTML content directly (no conversion needed)
+        disc_html = q.get('discussion_summary_html', '')
+        ai_html = q.get('ai_recommendation_html', '')
+
+        html += f'''
+        <div class="answer hidden" id="a{i}">
+        <h4>✅ Answer: {ans}</h4>
+        {f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>' if disc_html else ""}
+        {f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>' if ai_html else ""}
+        </div>
+        '''
         
         html += f'''
 <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
@@ -450,54 +412,32 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             images = answer_div.find_all('img')
             result['answer_images'] = [img.get('src', '') for img in images]
         
-        # Extract discussion summary
+        # Extract discussion summary - KEEP AS HTML
         discussion_div = soup.find('div', class_='discussion-summary')
         if discussion_div:
             header = discussion_div.find('h3')
             if header:
                 header.decompose()
             
-            text = discussion_div.get_text(separator='\n', strip=True)
-            text = '\n'.join(text.split())
-            result['discussion_summary'] = text
-        
-        # Extract AI recommendation
+            # Keep HTML format
+            result['discussion_summary_html'] = str(discussion_div)
+
+        # Extract AI recommendation - KEEP AS HTML
         ai_div = soup.find('div', class_='ai-recommendation')
         if ai_div:
-            # Remove all headers except Citations
-            for h in ai_div.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-                if 'citation' not in h.get_text().lower():
-                    h.decompose()
+            # Remove citation section
+            for h3 in ai_div.find_all('h3'):
+                if 'citation' in h3.get_text().lower():
+                    citation_header = h3
+                    citation_ul = citation_header.find_next_sibling('ul')
+                    if citation_ul:
+                        citation_ul.decompose()
+                    citation_header.decompose()
+                    break
             
-            # Find main paragraph
-            main_p = ai_div.find('p')
-            if main_p:
-                # Extract nested UL first
-                nested_ul = main_p.find('ul')
-                ul_text = ""
-                if nested_ul:
-                    ul_items = []
-                    for li in nested_ul.find_all('li', recursive=False):
-                        item_text = li.get_text(separator=' ', strip=True)
-                        item_text = ' '.join(item_text.split())
-                        if item_text:
-                            ul_items.append(f"- {item_text}")
-                    
-                    if ul_items:
-                        ul_text = '\n'.join(ul_items)
-                    
-                    nested_ul.decompose()
-                
-                # Now get paragraph text
-                para_text = main_p.get_text(separator='\n', strip=True)
-                para_text = '\n'.join(para_text.split())
-                
-                if ul_text:
-                    full_text = f"{para_text}\n{ul_text}"
-                else:
-                    full_text = para_text
-                
-                result['ai_recommendation'] = full_text
+            # Keep HTML format
+            result['ai_recommendation_html'] = str(ai_div)
+
             
             # Extract citations
             citations = []
@@ -1225,15 +1165,15 @@ def study_exam_page():
             if answer in question.get('choices', {}):
                 st.markdown(f"*{question['choices'][answer]}*")
 
-        # Discussion Summary
-        if 'discussion_summary' in question:
-            st.markdown("#### 💬 Internet Discussion Summary")
-            st.markdown(question['discussion_summary'])
+        # Show discussion - RENDER HTML
+        if question.get('discussion_summary_html'):
+            st.markdown("### 💬 Discussion")
+            st.markdown(question['discussion_summary_html'], unsafe_allow_html=True)
 
-        # AI Recommendation
-        if 'ai_recommendation' in question:
-            st.markdown("#### 🤖 AI Recommended Answer")
-            st.markdown(question['ai_recommendation'])
+        # Show AI recommendation - RENDER HTML
+        if question.get('ai_recommendation_html'):
+            st.markdown("### 🤖 AI Recommendation")  
+            st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
 
             # Citations
             if 'ai_citations' in question and question['ai_citations']:
