@@ -202,7 +202,8 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
         "DRAG DROP -",
         "SIMULATION -",
         "You need to",
-        "What should you"
+        "What should you",
+        "Hot Area:"
     ]
     
     for marker in markers:
@@ -503,7 +504,10 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # Extract question text
         question_div = soup.find('div', class_='question')
         if question_div:
-            result['question'] = question_div.get_text(separator='\n', strip=True)
+            question_text = question_div.get_text(separator='\n', strip=True)
+            # Remove duplicate chunks from question text
+            question_text = remove_duplicate_chunks(question_text, min_chunk_size=150)
+            result['question'] = question_text
             
             # Extract images from QUESTION HTML only
             images = question_div.find_all('img')
@@ -1270,7 +1274,7 @@ def study_exam_page():
         # st.markdown('<div class="question-container">', unsafe_allow_html=True)
 
         # st.markdown("### Question")
-        st.markdown(question.get('question', 'No question text available'))
+        st.markdown(remove_duplicate_chunks(question.get('question', 'No question text available')))
 
         # # Display images if available
         # if 'saved_images' in question and question['saved_images']:
@@ -1304,9 +1308,9 @@ def study_exam_page():
             # For HOTSPOT questions, show prompt if available
             if question.get('hotspot_prompt'):
                 st.info(f"📝 {question['hotspot_prompt']}")
-            st.warning("⚠️ This is a HOTSPOT/Hot Area question. Click 'Show Answer' to see the solution.")
-        else:
-            st.warning("⚠️ No answer options available. This may be a fill-in or hotspot question.")
+            # st.warning("⚠️ This is a HOTSPOT/Hot Area question. Click 'Show Answer' to see the solution.")
+        # else:
+        #     st.warning("⚠️ No answer options available. This may be a fill-in or hotspot question.")
 
         # st.markdown('</div>', unsafe_allow_html=True)
 
