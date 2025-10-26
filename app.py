@@ -195,8 +195,16 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
                 item_text = para.lstrip('-•* ').strip()
                 formatted_parts.append(f'<ul style="margin:12px 0;padding-left:24px"><li style="margin:8px 0;line-height:1.6">{item_text}</li></ul>')
             else:
-                # Regular paragraph
-                formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{para}</p>')
+                # Regular paragraph - add sentence breaks for readability
+                # Split on ". " (period followed by space) and rejoin with break
+                sentences = para.split('. ')
+                if len(sentences) > 2:  # Only add breaks for long paragraphs with multiple sentences
+                    formatted_para = '. '.join(sentences[:2]) + '.' + '<br><br>' + '. '.join(sentences[2:])
+                    # Fix any double periods
+                    formatted_para = formatted_para.replace('..', '.')
+                    formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{formatted_para}</p>')
+                else:
+                    formatted_parts.append(f'<p style="margin:12px 0;line-height:1.7">{para}</p>')
         
         return ''.join(formatted_parts)
 
