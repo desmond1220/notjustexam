@@ -461,43 +461,30 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             text = '\n'.join(text.split())
             result['discussion_summary'] = text
         
-        # Extract AI recommendation
-        ai_div = soup.find('div', class_='ai-recommendation')
-        if ai_div:
-            # Remove all headers except Citations
-            for h in ai_div.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
-                if 'citation' not in h.get_text().lower():
-                    h.decompose()
-            
-            # Find main paragraph
-            main_p = ai_div.find('p')
-            if main_p:
-                # Extract nested UL first
-                nested_ul = main_p.find('ul')
-                ul_text = ""
-                if nested_ul:
-                    ul_items = []
-                    for li in nested_ul.find_all('li', recursive=False):
-                        item_text = li.get_text(separator=' ', strip=True)
-                        item_text = ' '.join(item_text.split())
-                        if item_text:
-                            ul_items.append(f"- {item_text}")
-                    
-                    if ul_items:
-                        ul_text = '\n'.join(ul_items)
-                    
-                    nested_ul.decompose()
+            # Extract AI recommendation
+            ai_div = soup.find('div', class_='ai-recommendation')
+            if ai_div:
+                # Remove citation header and list (we'll extract separately)
+                citation_header = None
+                for h3 in ai_div.find_all('h3'):
+                    if 'citation' in h3.get_text().lower():
+                        citation_header = h3
+                        break
                 
-                # Now get paragraph text
-                para_text = main_p.get_text(separator='\n', strip=True)
-                para_text = '\n'.join(para_text.split())
+                if citation_header:
+                    # Remove citations section from main text
+                    citation_ul = citation_header.find_next_sibling('ul')
+                    if citation_ul:
+                        citation_ul.decompose()
+                    citation_header.decompose()
                 
-                if ul_text:
-                    full_text = f"{para_text}\n{ul_text}"
-                else:
-                    full_text = para_text
+                # Get ALL text from ai_div (not just first paragraph)
+                full_ai_text = ai_div.get_text(separator='\n', strip=True)
                 
-                result['ai_recommendation'] = full_text
+                # Clean up the text
+                if full_ai_text:
+                    result['ai_recommendation'] = full_ai_text
+
             
             # Extract citations
             citations = []
