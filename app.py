@@ -181,8 +181,7 @@ def convert_html_images_to_base64(html_content: str, exam_name: str, folder_pref
 
 def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
     """
-    Remove duplicate text chunks that appear consecutively in the text.
-    Handles cases where duplication starts after a short header.
+    Remove duplicate text chunks. Handles exact 50/50 duplicates and partial duplicates.
     
     Args:
         text: The text to deduplicate
@@ -195,43 +194,47 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
         return text
     
     text_len = len(text)
+    
+    # METHOD 1: Check for exact 50/50 split (most common case)
+    # Account for whitespace variations
+    for tolerance in range(-5, 6):  # Check ±5 characters around midpoint
+        mid = (text_len // 2) + tolerance
+        if mid < min_chunk_size or mid > text_len - min_chunk_size:
+            continue
+            
+        first_half = text[:mid].strip()
+        second_half = text[mid:].strip()
+        
+        # Check if they're identical
+        if first_half == second_half and len(first_half) >= min_chunk_size:
+            return first_half
+    
+    # METHOD 2: Find largest repeating substring
+    # Start from the beginning and find where it repeats
+    for chunk_size in range(text_len // 2, min_chunk_size - 1, -20):
+        chunk = text[:chunk_size]
+        
+        # Look for this chunk appearing again in the text
+        for start_pos in range(1, text_len - chunk_size):
+            if text[start_pos:start_pos + chunk_size] == chunk:
+                # Found duplicate! Return first occurrence
+                return chunk.strip()
+    
+    # METHOD 3: Line-by-line comparison
     lines = text.split('\n')
-    
-    # Method 1: Line-based deduplication (most reliable for this case)
-    # Check if the text contains repeating blocks of lines
-    if len(lines) > 4:
-        # Try to find where the duplicate starts
-        for split_point in range(1, len(lines) // 2 + 1):
-            first_part_lines = lines[:split_point]
-            
-            # Look for this block repeating later in the text
-            for search_start in range(split_point, len(lines)):
-                if search_start + split_point <= len(lines):
-                    potential_duplicate = lines[search_start:search_start + split_point]
-                    
-                    # Check if we found a matching block
-                    if first_part_lines == potential_duplicate and split_point > 2:
-                        # Found duplicate! Return text up to where duplicate starts
-                        return '\n'.join(lines[:search_start]).strip()
-    
-    # Method 2: Character-based deduplication
-    # Look for the largest repeating chunk
-    for start_offset in range(0, min(100, text_len // 3)):
-        for chunk_size in range(text_len // 2 - start_offset, min_chunk_size, -10):
-            chunk_start = start_offset
-            chunk_end = chunk_start + chunk_size
-            
-            if chunk_end > text_len:
+    if len(lines) >= 4:
+        half_lines = len(lines) // 2
+        
+        for offset in range(-2, 3):  # Check ±2 lines around midpoint
+            split = half_lines + offset
+            if split < 2 or split >= len(lines) - 2:
                 continue
                 
-            chunk = text[chunk_start:chunk_end]
+            first_part = '\n'.join(lines[:split])
+            second_part = '\n'.join(lines[split:])
             
-            # Search for this chunk appearing again later
-            next_occurrence = text.find(chunk, chunk_end)
-            
-            if next_occurrence != -1:
-                # Found duplicate - return text up to second occurrence
-                return text[:next_occurrence].strip()
+            if first_part.strip() == second_part.strip() and len(first_part) >= min_chunk_size:
+                return first_part.strip()
     
     return text
 
@@ -1243,7 +1246,7 @@ def study_exam_page():
         # st.markdown('<div class="question-container">', unsafe_allow_html=True)
 
         # st.markdown("### Question")
-        st.markdown(question.get('question', 'No question text available'))
+        st.markdown(remove_duplicate_chunks(question.get('question', 'No question text available')))
 
         # # Display images if available
         # if 'saved_images' in question and question['saved_images']:
