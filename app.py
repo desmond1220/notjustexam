@@ -570,7 +570,28 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         correct_answer = letter_span.get('data-choice-letter', '')
                     elif first_span:
                         correct_answer = first_span.get_text(strip=True).rstrip('.')
-        
+
+        # FORMAT 2: question-options (NEW - handles your HTML format)
+        # If no multi-choice-item found, try question-options format
+        if not choices:
+            question_options_div = soup.find('div', class_='question-options')
+            if question_options_div:
+                # Find all list items with letter prefix
+                option_items = question_options_div.find_all('li')
+                for item in option_items:
+                    # Get all text content and parse it
+                    full_text = item.get_text(separator=' ', strip=True)
+                    
+                    # Try to extract letter (A, B, C, D format)
+                    # Format: "A. Text here" or "<span>A.</span> Text here"
+                    match = re.match(r'^([A-Z])\.\\s*(.*)', full_text)
+                    if match:
+                        letter = match.group(1)
+                        choice_text = match.group(2).strip()
+                        choice_text = ' '.join(choice_text.split())  # Clean whitespace
+                        if letter and choice_text:
+                            choices[letter] = choice_text
+
         result['choices'] = choices
         if correct_answer:
             result['correct_answer'] = correct_answer
