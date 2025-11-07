@@ -492,7 +492,7 @@ def parse_folder_name(folder_name: str) -> Dict[str, int]:
     return None
 
 def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]:
-    """Extract content from HTML files using BeautifulSoup with proper formatting"""
+    """Extract content from HTML files using BeautifulSoup with support for multiple choice formats"""
     soup = BeautifulSoup(html_content, 'html.parser')
     result = {}
     
@@ -517,7 +517,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         choices = {}
         correct_answer = None
         
-        # Find all multi-choice items
+        # FORMAT 1: multi-choice-item (existing format)
         choice_items = soup.find_all('li', class_='multi-choice-item')
         
         if choice_items:
@@ -554,7 +554,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         # Try Format 3: No span, letter is direct text (e.g., "A. Choice text")
                         full_text = item.get_text(separator=' ', strip=True)
                         # Match pattern: "A. text" or "A. text"
-                        match = re.match(r'^([A-Z])\.\s*(.*)', full_text)
+                        match = re.match(r'^([A-Z])\.\\s*(.*)', full_text)
                         if match:
                             letter = match.group(1)
                             choice_text = match.group(2).strip()
@@ -570,7 +570,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         correct_answer = letter_span.get('data-choice-letter', '')
                     elif first_span:
                         correct_answer = first_span.get_text(strip=True).rstrip('.')
-
+        
         # FORMAT 2: question-options (NEW - handles your HTML format)
         # If no multi-choice-item found, try question-options format
         if not choices:
@@ -591,7 +591,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         choice_text = ' '.join(choice_text.split())  # Clean whitespace
                         if letter and choice_text:
                             choices[letter] = choice_text
-
+        
         result['choices'] = choices
         if correct_answer:
             result['correct_answer'] = correct_answer
@@ -607,7 +607,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
-            match = re.search(r'Suggested Answer[:\s]+([A-Z])', suggested_answer_text)
+            match = re.search(r'Suggested Answer[:\\s]+([A-Z])', suggested_answer_text)
             if match:
                 result['suggested_answer'] = match.group(1)
             else:
@@ -666,7 +666,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 result['ai_citations'] = citations
     
     return result
-
 
 
 def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
