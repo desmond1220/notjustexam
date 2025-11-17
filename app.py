@@ -69,6 +69,23 @@ st.markdown("""
         margin: 8px 0;
         list-style-type: disc;
     }
+
+    .sticky-nav {
+        position: sticky;
+        top: 0;
+        z-index: 999;
+        background: white;
+        padding: 16px 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .nav-button-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 0 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1286,6 +1303,33 @@ def study_exam_page():
 
     st.markdown("---")
 
+    # Sticky Navigation at Top
+    st.markdown('<div class="sticky-nav">', unsafe_allow_html=True)
+    nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
+
+    with nav_col1:
+        if current_idx > 0:
+            if st.button("⬅️ Previous", key=f"prev_top_{current_idx}", use_container_width=True):
+                st.session_state.current_question_index -= 1
+                st.rerun()
+
+    with nav_col2:
+        st.markdown(f'<div style="text-align: center; padding: 8px;">Question {current_idx + 1} of {len(questions)}</div>', unsafe_allow_html=True)
+
+    with nav_col3:
+        if current_idx < len(questions) - 1:
+            if st.button("Next ➡️", key=f"next_top_{current_idx}", use_container_width=True):
+                st.session_state.current_question_index += 1
+                st.rerun()
+        else:
+            if st.button("🎉 Finish", key=f"finish_top_{current_idx}", use_container_width=True, type="primary"):
+                st.success("🎉 Congratulations! You've completed all questions!")
+                st.balloons()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+
     # Display current question
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
@@ -1426,25 +1470,7 @@ def study_exam_page():
                 for citation in question['ai_citations']:
                     st.markdown(f"- {citation}")
 
-    # Navigation
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
 
-    with col1:
-        if current_idx > 0:
-            if st.button("⬅️ Previous", use_container_width=True):
-                st.session_state.current_question_index -= 1
-                st.rerun()
-
-    with col3:
-        if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", use_container_width=True):
-                st.session_state.current_question_index += 1
-                st.rerun()
-        else:
-            if st.button("🎉 Finish", use_container_width=True, type="primary"):
-                st.success("🎉 Congratulations! You've completed all questions!")
-                st.balloons()
 
 # ============= MAIN APPLICATION =============
 
