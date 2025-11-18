@@ -1244,7 +1244,7 @@ def create_exam_page():
 
 
 def study_exam_page():
-    """Page for studying an exam - Enhanced with top controls and answer click feedback"""
+    """Page for studying an exam"""
     exam_name = st.session_state.selected_exam
     exam_data = load_exam(exam_name)
 
@@ -1283,63 +1283,6 @@ def study_exam_page():
 
     st.markdown("---")
 
-    # ============= TOP NAVIGATION AND CONTROLS =============
-    nav_col1, nav_col2, nav_col3, nav_col4, nav_col5 = st.columns([1, 2, 2, 2, 1])
-
-    with nav_col1:
-        if current_idx > 0:
-            if st.button("⬅️ Previous", key="top_prev", use_container_width=True):
-                st.session_state.current_question_index -= 1
-                st.rerun()
-        else:
-            st.write("")  # Empty placeholder
-
-    with nav_col2:
-        # Direct page selection
-        selected_page = st.selectbox(
-            "Jump to Question",
-            options=range(1, len(questions) + 1),
-            index=current_idx,
-            key="page_selector",
-            label_visibility="collapsed"
-        )
-        if selected_page - 1 != current_idx:
-            st.session_state.current_question_index = selected_page - 1
-            st.rerun()
-
-    with nav_col3:
-        # Show/Hide Answer toggle
-        question_id = f"q_{questions[current_idx]['topic_index']}_{questions[current_idx]['question_index']}"
-        if question_id not in st.session_state.show_answer:
-            st.session_state.show_answer[question_id] = False
-
-        if not st.session_state.show_answer[question_id]:
-            if st.button("💡 Show Answer", key=f"top_show_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = True
-                st.rerun()
-        else:
-            if st.button("🔒 Hide Answer", key=f"top_hide_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = False
-                st.rerun()
-
-    with nav_col4:
-        # Display feedback status - FIXED: removed unsupported 'help' parameter
-        clicked_answer = st.session_state.get(f"clicked_answer_{current_idx}")
-        if clicked_answer:
-            st.caption("✓ Answer selected")
-        else:
-            st.caption("👆 Click an option")
-
-    with nav_col5:
-        if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", key="top_next", use_container_width=True):
-                st.session_state.current_question_index += 1
-                st.rerun()
-        else:
-            st.write("")  # Empty placeholder
-
-    st.markdown("---")
-
     # Display current question
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
@@ -1351,10 +1294,10 @@ def study_exam_page():
         # Get and deduplicate question text
         question_text = question.get('question', 'No question text available')
         question_text = remove_duplicate_chunks(question_text)
-
+        
         # Convert to HTML with line breaks
         question_html = question_text.replace('\n', '<br>')
-
+        
         # Display question with clean styled HTML (white background, colored border)
         styled_question = f"""
         <div class="question-text" style="
@@ -1378,67 +1321,75 @@ def study_exam_page():
                 if img_path.exists():
                     st.image(str(img_path))
 
-        # Display answer choices if they exist with clickable feedback
+        # Display answer choices if they exist with HTML styling
         if question.get('choices'):
             st.markdown("### Answer Options:")
-
-            correct_answer = question.get('suggested_answer') or question.get('correct_answer', '')
-
-            # Initialize clicked answer state for this question if not exists
-            if f"clicked_answer_{current_idx}" not in st.session_state:
-                st.session_state[f"clicked_answer_{current_idx}"] = None
-
+            
+            # Create styled options HTML
             for letter, text in sorted(question['choices'].items()):
-                is_correct = (letter == correct_answer)
-                clicked = st.session_state.get(f"clicked_answer_{current_idx}") == letter
-
-                # Display answer button with dynamic styling
-                if clicked:
-                    # Show clicked answer with feedback
-                    if is_correct:
-                        st.success(f"✅ **{letter}. {text}** - Correct Answer!")
-                    else:
-                        st.error(f"❌ **{letter}. {text}** - This is incorrect")
-                        if correct_answer:
-                            correct_text = question['choices'].get(correct_answer, correct_answer)
-                            st.info(f"💡 The correct answer is: **{correct_answer}. {correct_text}**")
-                else:
-                    # Normal answer button
-                    button_key = f"answer_{current_idx}_{letter}"
-                    if st.button(
-                        f"{letter}. {text}",
-                        key=button_key,
-                        use_container_width=True
-                    ):
-                        st.session_state[f"clicked_answer_{current_idx}"] = letter
-                        st.session_state.show_answer[question_id] = True  # Auto-show answer
-                        st.rerun()
-
-                # Show correct answer highlight when Show Answer is pressed (and no click)
-                if st.session_state.show_answer.get(question_id, False) and is_correct and st.session_state.get(f"clicked_answer_{current_idx}") is None:
+                is_correct = (letter == question.get('suggested_answer', '') or 
+                            letter == question.get('correct_answer', ''))
+                
+                # Show correct answer with green styling when answer is shown
+                if st.session_state.show_answer.get(current_idx, False) and is_correct:
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #28a745;
                         border-radius: 10px;
-                        background: #f0f8f4;
+                        background: white;
                         box-shadow: 0 2px 4px rgba(40,167,69,0.15);
                     ">
-                        <strong style="color: #28a745; font-size: 1.1em;">✓ {letter}.</strong> 
-                        <span style="color: #155724;">{text}</span>
+                        <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #155724;">{text}</span> 
+                        <strong style="color: #28a745; float: right;">✓</strong>
                     </div>
                     """
                     st.markdown(option_html, unsafe_allow_html=True)
-
+                else:
+                    # Regular option styling
+                    option_html = f"""
+                    <div style="
+                        padding: 16px;
+                        margin: 12px 0;
+                        border: 2px solid #e9ecef;
+                        border-radius: 10px;
+                        background: white;
+                        transition: all 0.3s;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                    ">
+                        <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #495057;">{text}</span>
+                    </div>
+                    """
+                    st.markdown(option_html, unsafe_allow_html=True)
+                    
         elif question.get('question_type') == 'hotspot':
             # For HOTSPOT questions, show prompt if available
             if question.get('hotspot_prompt'):
                 st.info(f"📝 {question['hotspot_prompt']}")
 
-    # Display full answer section
+    # Show answer section
     st.markdown("---")
 
+
+    if question_id not in st.session_state.show_answer:
+        st.session_state.show_answer[question_id] = False
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if not st.session_state.show_answer[question_id]:
+            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = True
+                st.rerun()
+        else:
+            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = False
+                st.rerun()
+
+    # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
         with st.container():
             # Show answer images only here
@@ -1463,6 +1414,7 @@ def study_exam_page():
 
         # Show AI recommendation - RENDER HTML
         if question.get('ai_recommendation_html'):
+            # st.markdown("### 🤖 AI Recommendation")  
             st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
 
             # Citations
@@ -1471,30 +1423,25 @@ def study_exam_page():
                 for citation in question['ai_citations']:
                     st.markdown(f"- {citation}")
 
-    # Bottom Navigation (same as before)
+    # Navigation
     st.markdown("---")
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col1:
         if current_idx > 0:
-            if st.button("⬅️ Previous", use_container_width=True, key="bottom_prev"):
+            if st.button("⬅️ Previous", use_container_width=True):
                 st.session_state.current_question_index -= 1
                 st.rerun()
 
-    with col2:
-        # Question counter in middle
-        st.caption(f"Q {current_idx + 1}/{len(questions)}")
-
     with col3:
         if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", use_container_width=True, key="bottom_next"):
+            if st.button("Next ➡️", use_container_width=True):
                 st.session_state.current_question_index += 1
                 st.rerun()
         else:
-            if st.button("🎉 Finish", use_container_width=True, type="primary", key="finish_btn"):
+            if st.button("🎉 Finish", use_container_width=True, type="primary"):
                 st.success("🎉 Congratulations! You've completed all questions!")
                 st.balloons()
-
 
 # ============= MAIN APPLICATION =============
 
