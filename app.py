@@ -1283,10 +1283,52 @@ def study_exam_page():
 
     st.markdown("---")
 
-    # Display current question
+    # MOVED TO TOP: Navigation and Answer Toggle Buttons
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
 
+    # Initialize show_answer state for this question
+    if question_id not in st.session_state.show_answer:
+        st.session_state.show_answer[question_id] = False
+
+    # Top button row with 4 columns
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if current_idx > 0:
+            if st.button("⬅️ Previous", key=f"prev_top_{question_id}", use_container_width=True):
+                st.session_state.current_question_index -= 1
+                st.rerun()
+        else:
+            st.button("⬅️ Previous", key=f"prev_top_disabled_{question_id}", use_container_width=True, disabled=True)
+
+    with col2:
+        if current_idx < len(questions) - 1:
+            if st.button("Next ➡️", key=f"next_top_{question_id}", use_container_width=True):
+                st.session_state.current_question_index += 1
+                st.rerun()
+        else:
+            if st.button("🎉 Finish", key=f"finish_top_{question_id}", use_container_width=True, type="primary"):
+                st.success("🎉 Congratulations! You've completed all questions!")
+                st.balloons()
+
+    with col3:
+        if not st.session_state.show_answer[question_id]:
+            if st.button("💡 Show Answer", key=f"show_top_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = True
+                st.rerun()
+        else:
+            if st.button("🔒 Hide Answer", key=f"hide_top_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = False
+                st.rerun()
+
+    with col4:
+        # Empty column for spacing or future use
+        st.write("")
+
+    st.markdown("---")
+
+    # Display current question
     st.markdown(f"## {question['question_name']}")
 
     # Question content
@@ -1294,10 +1336,10 @@ def study_exam_page():
         # Get and deduplicate question text
         question_text = question.get('question', 'No question text available')
         question_text = remove_duplicate_chunks(question_text)
-        
+
         # Convert to HTML with line breaks
         question_html = question_text.replace('\n', '<br>')
-        
+
         # Display question with clean styled HTML (white background, colored border)
         styled_question = f"""
         <div class="question-text" style="
@@ -1324,70 +1366,39 @@ def study_exam_page():
         # Display answer choices if they exist with HTML styling
         if question.get('choices'):
             st.markdown("### Answer Options:")
-            
+
             # Create styled options HTML
             for letter, text in sorted(question['choices'].items()):
-                is_correct = (letter == question.get('suggested_answer', '') or 
-                            letter == question.get('correct_answer', ''))
-                
+                is_correct = (letter == question.get('suggested_answer') or 
+                             letter == question.get('correct_answer'))
+
                 # Show correct answer with green styling when answer is shown
-                if st.session_state.show_answer.get(current_idx, False) and is_correct:
+                if st.session_state.show_answer.get(question_id, False) and is_correct:
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #28a745;
+                        background: #d4edda;
                         border-radius: 10px;
-                        background: white;
-                        box-shadow: 0 2px 4px rgba(40,167,69,0.15);
+                        font-weight: 500;
                     ">
-                        <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
-                        <span style="color: #155724;">{text}</span> 
-                        <strong style="color: #28a745; float: right;">✓</strong>
+                        <strong>{letter}.</strong> {text}
                     </div>
                     """
-                    st.markdown(option_html, unsafe_allow_html=True)
                 else:
-                    # Regular option styling
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #e9ecef;
-                        border-radius: 10px;
                         background: white;
-                        transition: all 0.3s;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                        border-radius: 10px;
                     ">
-                        <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
-                        <span style="color: #495057;">{text}</span>
+                        <strong>{letter}.</strong> {text}
                     </div>
                     """
-                    st.markdown(option_html, unsafe_allow_html=True)
-                    
-        elif question.get('question_type') == 'hotspot':
-            # For HOTSPOT questions, show prompt if available
-            if question.get('hotspot_prompt'):
-                st.info(f"📝 {question['hotspot_prompt']}")
-
-    # Show answer section
-    st.markdown("---")
-
-
-    if question_id not in st.session_state.show_answer:
-        st.session_state.show_answer[question_id] = False
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if not st.session_state.show_answer[question_id]:
-            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = True
-                st.rerun()
-        else:
-            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = False
-                st.rerun()
+                st.markdown(option_html, unsafe_allow_html=True)
 
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
@@ -1399,51 +1410,83 @@ def study_exam_page():
                     if img_path.exists():
                         st.image(str(img_path))
 
-        # Suggested Answer
-        if 'suggested_answer' in question or 'correct_answer' in question:
-            st.markdown("#### ✅ Suggested Answer")
-            answer = question.get('suggested_answer') or question.get('correct_answer')
-            st.markdown(f"**Answer: {answer}**")
-            if answer in question.get('choices', {}):
-                st.markdown(f"*{question['choices'][answer]}*")
+            # Suggested Answer with HTML support
+            if question.get('suggested_answer_html'):
+                st.markdown("### ✅ Suggested Answer")
 
-        # Show discussion - RENDER HTML
-        if question.get('discussion_summary_html'):
-            st.markdown("### 💬 Discussion")
-            st.markdown(question['discussion_summary_html'], unsafe_allow_html=True)
+                # Convert HTML images to base64
+                folder_prefix = f"topic_{question['topic_index']}_question_{question['question_index']}"
+                answer_html_converted = convert_html_images_to_base64(
+                    question['suggested_answer_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
 
-        # Show AI recommendation - RENDER HTML
-        if question.get('ai_recommendation_html'):
-            # st.markdown("### 🤖 AI Recommendation")  
-            st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
+                answer_styled = f"""
+                <div class="answer" style="
+                    margin-top: 24px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    border-left: 4px solid #28a745;
+                ">
+                    {answer_html_converted}
+                </div>
+                """
+                st.markdown(answer_styled, unsafe_allow_html=True)
+            elif question.get('suggested_answer'):
+                st.success(f"**Answer:** {question['suggested_answer']}")
 
-            # Citations
-            if 'ai_citations' in question and question['ai_citations']:
-                st.markdown("**References:**")
-                for citation in question['ai_citations']:
-                    st.markdown(f"- {citation}")
+            # Discussion Summary with HTML support
+            if question.get('discussion_summary_html'):
+                st.markdown("### 💬 Discussion")
 
-    # Navigation
-    st.markdown("---")
-    col1, col2, col3 = st.columns([1, 2, 1])
+                # Convert HTML images to base64
+                discussion_html_converted = convert_html_images_to_base64(
+                    question['discussion_summary_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
 
-    with col1:
-        if current_idx > 0:
-            if st.button("⬅️ Previous", use_container_width=True):
-                st.session_state.current_question_index -= 1
-                st.rerun()
+                discussion_styled = f"""
+                <div class="discussion" style="
+                    margin: 16px 0;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    border-left: 4px solid #667eea;
+                    line-height: 1.7;
+                ">
+                    {discussion_html_converted}
+                </div>
+                """
+                st.markdown(discussion_styled, unsafe_allow_html=True)
 
-    with col3:
-        if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", use_container_width=True):
-                st.session_state.current_question_index += 1
-                st.rerun()
-        else:
-            if st.button("🎉 Finish", use_container_width=True, type="primary"):
-                st.success("🎉 Congratulations! You've completed all questions!")
-                st.balloons()
+            # AI Recommendation with HTML support
+            if question.get('ai_recommendation_html'):
+                st.markdown("### 🤖 AI Recommendation")
 
-# ============= MAIN APPLICATION =============
+                # Convert HTML images to base64
+                ai_html_converted = convert_html_images_to_base64(
+                    question['ai_recommendation_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
+
+                ai_styled = f"""
+                <div class="ai-answer" style="
+                    margin: 16px 0;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    border-left: 4px solid #764ba2;
+                    line-height: 1.7;
+                ">
+                    {ai_html_converted}
+                </div>
+                """
+                st.markdown(ai_styled, unsafe_allow_html=True)
+
 
 def main():
     """Main application entry point"""
