@@ -1291,6 +1291,8 @@ def study_exam_page():
             if st.button("⬅️ Previous", key="top_prev", use_container_width=True):
                 st.session_state.current_question_index -= 1
                 st.rerun()
+        else:
+            st.write("")  # Empty placeholder
 
     with nav_col2:
         # Direct page selection
@@ -1321,14 +1323,20 @@ def study_exam_page():
                 st.rerun()
 
     with nav_col4:
-        # Spacer with info
-        st.info("📊 Select answers to get feedback", help="Click any answer option to see if it's correct")
+        # Display feedback status - FIXED: removed unsupported 'help' parameter
+        clicked_answer = st.session_state.get(f"clicked_answer_{current_idx}")
+        if clicked_answer:
+            st.caption("✓ Answer selected")
+        else:
+            st.caption("👆 Click an option")
 
     with nav_col5:
         if current_idx < len(questions) - 1:
             if st.button("Next ➡️", key="top_next", use_container_width=True):
                 st.session_state.current_question_index += 1
                 st.rerun()
+        else:
+            st.write("")  # Empty placeholder
 
     st.markdown("---")
 
@@ -1391,7 +1399,9 @@ def study_exam_page():
                         st.success(f"✅ **{letter}. {text}** - Correct Answer!")
                     else:
                         st.error(f"❌ **{letter}. {text}** - This is incorrect")
-                        st.info(f"💡 **The correct answer is: {correct_answer}**")
+                        if correct_answer:
+                            correct_text = question['choices'].get(correct_answer, correct_answer)
+                            st.info(f"💡 The correct answer is: **{correct_answer}. {correct_text}**")
                 else:
                     # Normal answer button
                     button_key = f"answer_{current_idx}_{letter}"
@@ -1406,7 +1416,20 @@ def study_exam_page():
 
                 # Show correct answer highlight when Show Answer is pressed (and no click)
                 if st.session_state.show_answer.get(question_id, False) and is_correct and st.session_state.get(f"clicked_answer_{current_idx}") is None:
-                    st.markdown(f"✅ **{letter}. {text}** (Correct Answer)", help="This is the correct answer")
+                    option_html = f"""
+                    <div style="
+                        padding: 16px;
+                        margin: 12px 0;
+                        border: 2px solid #28a745;
+                        border-radius: 10px;
+                        background: #f0f8f4;
+                        box-shadow: 0 2px 4px rgba(40,167,69,0.15);
+                    ">
+                        <strong style="color: #28a745; font-size: 1.1em;">✓ {letter}.</strong> 
+                        <span style="color: #155724;">{text}</span>
+                    </div>
+                    """
+                    st.markdown(option_html, unsafe_allow_html=True)
 
         elif question.get('question_type') == 'hotspot':
             # For HOTSPOT questions, show prompt if available
@@ -1471,6 +1494,7 @@ def study_exam_page():
             if st.button("🎉 Finish", use_container_width=True, type="primary", key="finish_btn"):
                 st.success("🎉 Congratulations! You've completed all questions!")
                 st.balloons()
+
 
 # ============= MAIN APPLICATION =============
 
