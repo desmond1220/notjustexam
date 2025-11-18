@@ -633,7 +633,7 @@ def study_page():
     exam_name = st.session_state.selected_exam
     exam_data = load_exam(exam_name)
 
-    if not exam_
+    if not exam_data:
         st.error("Exam not found")
         return
 
@@ -805,7 +805,7 @@ def home_page():
 
         for exam_name in exams:
             exam_data = load_exam(exam_name)
-            if exam_
+            if exam_data:
                 is_protected = exam_data.get('password_protected', False)
                 is_authenticated = is_exam_authenticated(exam_name)
 
