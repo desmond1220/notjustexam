@@ -1283,7 +1283,7 @@ def study_exam_page():
 
     st.markdown("---")
 
-    # MOVED TO TOP: Navigation and Answer Toggle Buttons
+    # ENHANCED: Navigation, Question Selector, and Answer Toggle Buttons at TOP
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
 
@@ -1291,8 +1291,8 @@ def study_exam_page():
     if question_id not in st.session_state.show_answer:
         st.session_state.show_answer[question_id] = False
 
-    # Top button row with 4 columns
-    col1, col2, col3, col4 = st.columns(4)
+    # Top button row with 5 columns (added question selector)
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1.2, 1, 0.8])
 
     with col1:
         if current_idx > 0:
@@ -1313,6 +1313,20 @@ def study_exam_page():
                 st.balloons()
 
     with col3:
+        # Question selector - allows jumping to any question
+        selected_question = st.selectbox(
+            "Jump to Question:",
+            options=list(range(1, len(questions) + 1)),
+            index=current_idx,
+            key=f"question_selector_{question_id}",
+            label_visibility="collapsed",
+            help="Select a question number to jump directly to it"
+        )
+        if selected_question - 1 != current_idx:
+            st.session_state.current_question_index = selected_question - 1
+            st.rerun()
+
+    with col4:
         if not st.session_state.show_answer[question_id]:
             if st.button("💡 Show Answer", key=f"show_top_{question_id}", use_container_width=True):
                 st.session_state.show_answer[question_id] = True
@@ -1322,7 +1336,7 @@ def study_exam_page():
                 st.session_state.show_answer[question_id] = False
                 st.rerun()
 
-    with col4:
+    with col5:
         # Empty column for spacing or future use
         st.write("")
 
