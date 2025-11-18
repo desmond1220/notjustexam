@@ -1287,9 +1287,15 @@ def study_exam_page():
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
 
-    # Initialize show_answer state for this question
+    # Initialize session state for this question
     if question_id not in st.session_state.show_answer:
         st.session_state.show_answer[question_id] = False
+
+    # Initialize selected_answer tracking (NEW!)
+    if 'selected_answer' not in st.session_state:
+        st.session_state.selected_answer = {}
+    if question_id not in st.session_state.selected_answer:
+        st.session_state.selected_answer[question_id] = None
 
     # Top button row with 5 columns (added question selector)
     col1, col2, col3, col4, col5 = st.columns([1, 1, 1.2, 1, 0.8])
@@ -1337,8 +1343,12 @@ def study_exam_page():
                 st.rerun()
 
     with col5:
-        # Empty column for spacing or future use
-        st.write("")
+        # Reset answer button (NEW!)
+        if st.session_state.selected_answer[question_id] is not None:
+            if st.button("🔄", key=f"reset_{question_id}", use_container_width=True, help="Reset your answer"):
+                st.session_state.selected_answer[question_id] = None
+                st.session_state.show_answer[question_id] = False
+                st.rerun()
 
     st.markdown("---")
 
@@ -1377,46 +1387,99 @@ def study_exam_page():
                 if img_path.exists():
                     st.image(str(img_path))
 
-        # Display answer choices if they exist with HTML styling
+        # Display answer choices if they exist - NOW CLICKABLE!
         if question.get('choices'):
             st.markdown("### Answer Options:")
 
-            # Create styled options HTML
+            # Get correct answer
+            correct_answer = question.get('suggested_answer') or question.get('correct_answer')
+            user_answer = st.session_state.selected_answer[question_id]
+
+            # Create clickable options
             for letter, text in sorted(question['choices'].items()):
-                is_correct = (letter == question.get('suggested_answer') or 
-                             letter == question.get('correct_answer'))
+                is_correct = (letter == correct_answer)
+                is_selected = (letter == user_answer)
 
-                # Show correct answer with green styling when answer is shown
-                if st.session_state.show_answer.get(question_id, False) and is_correct:
-                    option_html = f"""
-                    <div style="
-                        padding: 16px;
-                        margin: 12px 0;
-                        border: 2px solid #28a745;
-                        background: #d4edda;
-                        border-radius: 10px;
-                        font-weight: 500;
-                    ">
-                        <strong>{letter}.</strong> {text}
-                    </div>
-                    """
+                # Determine styling based on selection and correctness
+                if is_selected:
+                    if is_correct:
+                        # User selected correct answer - GREEN
+                        border_color = "#28a745"
+                        bg_color = "#d4edda"
+                        icon = "✅"
+                        feedback = "Correct!"
+                    else:
+                        # User selected wrong answer - RED
+                        border_color = "#dc3545"
+                        bg_color = "#f8d7da"
+                        icon = "❌"
+                        feedback = "Incorrect"
+                elif st.session_state.show_answer.get(question_id, False) and is_correct:
+                    # Answer revealed and this is correct - GREEN (show correct answer)
+                    border_color = "#28a745"
+                    bg_color = "#d4edda"
+                    icon = "✅"
+                    feedback = "Correct Answer"
                 else:
+                    # Default styling
+                    border_color = "#e9ecef"
+                    bg_color = "white"
+                    icon = ""
+                    feedback = ""
+
+                # Create button column layout for clickable option
+                col_option, col_feedback = st.columns([4, 1])
+
+                with col_option:
+                    # Make option clickable as a button
+                    button_style = "primary" if is_selected else "secondary"
+                    option_display = f"{letter}. {text[:80]}{'...' if len(text) > 80 else ''}"
+
+                    if st.button(option_display, 
+                                key=f"option_{question_id}_{letter}",
+                                use_container_width=True,
+                                disabled=user_answer is not None,  # Disable after selection
+                                type=button_style if is_selected else "secondary"):
+                        # User clicked this option
+                        st.session_state.selected_answer[question_id] = letter
+                        st.session_state.show_answer[question_id] = True  # Auto-show answer
+                        st.rerun()
+
+                with col_feedback:
+                    if is_selected or (st.session_state.show_answer.get(question_id, False) and is_correct):
+                        st.markdown(f"**{icon} {feedback}**")
+
+                # Show full option text below button with styled box
+                if text:
                     option_html = f"""
                     <div style="
-                        padding: 16px;
-                        margin: 12px 0;
-                        border: 2px solid #e9ecef;
-                        background: white;
-                        border-radius: 10px;
+                        padding: 12px 16px;
+                        margin: 8px 0 16px 0;
+                        border: 2px solid {border_color};
+                        background: {bg_color};
+                        border-radius: 8px;
+                        font-size: 0.95rem;
                     ">
                         <strong>{letter}.</strong> {text}
                     </div>
                     """
-                st.markdown(option_html, unsafe_allow_html=True)
+                    st.markdown(option_html, unsafe_allow_html=True)
 
-    # Display answer if shown
-    if st.session_state.show_answer.get(question_id, False):
+    # Display answer if shown (either by button or by clicking an option)
+    if st.session_state.show_answer.get(question_id, False) or st.session_state.selected_answer[question_id] is not None:
         with st.container():
+            # Show user's selection feedback at top of answer section
+            if st.session_state.selected_answer[question_id] is not None:
+                user_ans = st.session_state.selected_answer[question_id]
+                correct_ans = question.get('suggested_answer') or question.get('correct_answer')
+
+                if user_ans == correct_ans:
+                    st.success(f"✅ **Correct!** You selected **{user_ans}** which is the right answer.")
+                else:
+                    st.error(f"❌ **Incorrect.** You selected **{user_ans}**, but the correct answer is **{correct_ans}**.")
+
+                st.markdown("---")
+
             # Show answer images only here
             if question.get('answer_images'):
                 for img_file in question['answer_images']:
