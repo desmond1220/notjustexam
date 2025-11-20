@@ -341,7 +341,8 @@ body{{padding:4px}}
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=150)
         # Just use text as-is with basic line break formatting
-        formatted_text = text.replace('\n', '<br>')
+        import html as html_lib
+        formatted_text = html_lib.escape(text).replace('\n', '<br>')
 
         # Build choices
         opts = ""
@@ -380,11 +381,13 @@ body{{padding:4px}}
 
 
         html += f'''
-<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
-<h3>Topic {topic} - Question {qnum}</h3>
-<div class="question-text">{formatted_text}</div>
-{imgs}
-<div>{opts}</div>
+<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}; overflow: auto;">
+    <h3>Topic {topic} - Question {qnum}</h3>
+    <div class="question-text">
+        {formatted_text}
+    </div>
+    {imgs}
+    <div>{opts}</div>
 <div class="answer hidden" id="a{i}">'''
         
         # If we have HTML answer with detailed content, use that instead of just the letter
@@ -414,12 +417,19 @@ body{{padding:4px}}
 <script>
 let c=0,t={count},ans={{}},s=false;
 function load(){{
-    let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');
-    if(d){{
-        let p=JSON.parse(d);
-        ans=p.a||{{}};
-        c=p.c||0;
+    try {{
+        let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');
+        if(d){{
+            let p=JSON.parse(d);
+            ans=p.a||{{}};
+            c=p.c||0;
+        }}
+    }} catch(e) {{
+        console.error('Error loading progress:', e);
+        c = 0; // Fallback to start
     }}
+    // Ensure c is within bounds
+    if(c < 0 || c >= t) c = 0;
     show(c);
 }}
 function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:c,a:ans}}))}}
