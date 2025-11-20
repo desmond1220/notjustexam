@@ -110,10 +110,6 @@ def is_exam_authenticated(exam_name: str) -> bool:
 def image_to_base64(image_path: str) -> str:
     """Convert image to base64 for embedding"""
     try:
-        if not Path(image_path).exists():
-            print(f"Warning: Image not found: {image_path}")
-            return ""
-        
         with open(image_path, 'rb') as f:
             image_data = f.read()
             base64_data = base64.b64encode(image_data).decode('utf-8')
@@ -122,8 +118,7 @@ def image_to_base64(image_path: str) -> str:
                          '.png': 'image/png', '.gif': 'image/gif'}
             mime_type = mime_types.get(ext, 'image/jpeg')
             return f"data:{mime_type};base64,{base64_data}"
-    except Exception as e:
-        print(f"Error converting image {image_path}: {e}")
+    except:
         return ""
 
 
@@ -335,7 +330,6 @@ body{{padding:4px}}
 <div style="height:4px;background:#e9ecef"><div class="progress-bar" id="prog" style="width:0%"></div></div>
 <div id="qs">'''
     
-    
     # Add questions
     for i, q in enumerate(questions):
         topic = q.get('topic_index', 1)
@@ -349,33 +343,12 @@ body{{padding:4px}}
         # Just use text as-is with basic line break formatting
         formatted_text = text.replace('\n', '<br>')
 
-        # FIX: If choices are empty, try to extract from question text
-        if not choices and text:
-            # Extract inline options (A. text, B. text, etc.)
-            option_pattern = r'([A-D])\.\s+(.+?)(?=\n[A-D]\.|$)'
-            matches = re.findall(option_pattern, text, re.MULTILINE | re.DOTALL)
-            
-            if matches:
-                for letter, choice_text in matches:
-                    choice_text = choice_text.strip()
-                    if choice_text and not choice_text.startswith('Question'):
-                        choices[letter] = choice_text
-                
-                # Clean the formatted_text to remove the inline options
-                # so they don't appear twice
-                for letter in choices.keys():
-                    # Remove "A. Option text" from formatted_text
-                    pattern = r'<br>' + letter + r'\.\s+.+?(?=<br>[A-D]\.|$)'
-                    formatted_text = re.sub(pattern, '', formatted_text, flags=re.DOTALL)
-
         # Build choices
         opts = ""
         if choices:
             for letter, choice in sorted(choices.items()):
                 correct = "true" if letter == ans else "false"
                 opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
-        else:
-            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ No answer options available for this question. Options may be embedded in the question text.</div>'
         # elif q.get('question_type') == 'hotspot':
         #     opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
         # else:
@@ -387,8 +360,8 @@ body{{padding:4px}}
             img_path = DATA_DIR / exam_name / "images" / img_file
             if img_path.exists():
                 b64 = image_to_base64(str(img_path))
-                if b64:  # Only add if conversion succeeded
-                    imgs += f'<img src="{b64}" alt="Question image">'
+                if b64:
+                    imgs += f'<img src="{b64}">'
         
         # Embed answer images (same mechanism as Streamlit - use answer_images)
         answer_imgs = ""
@@ -397,8 +370,8 @@ body{{padding:4px}}
                 img_path = DATA_DIR / exam_name / "images" / img_file
                 if img_path.exists():
                     b64 = image_to_base64(str(img_path))
-                    if b64:  # Only add if conversion succeeded
-                        answer_imgs += f'<img src="{b64}" alt="Answer image">'
+                    if b64:
+                        answer_imgs += f'<img src="{b64}">'
         
         # Get HTML content (no conversion needed - images are separate)
         answer_html = q.get('suggested_answer_html', '')
@@ -407,13 +380,11 @@ body{{padding:4px}}
 
 
         html += f'''
-<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}; overflow: auto;">
-    <h3>Topic {topic} - Question {qnum}</h3>
-    <div class="question-text">
-        {formatted_text}
-    </div>
-    {imgs}
-    <div>{opts}</div>
+<div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
+<h3>Topic {topic} - Question {qnum}</h3>
+<div class="question-text">{formatted_text}</div>
+{imgs}
+<div>{opts}</div>
 <div class="answer hidden" id="a{i}">'''
         
         # If we have HTML answer with detailed content, use that instead of just the letter
@@ -434,49 +405,25 @@ body{{padding:4px}}
         if ai_html:
             html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
 
-        # html += '</div>\n</div>\n'
-        html += '</div>'
+        html += '</div>\n</div>\n'
 
     # Add JavaScript
     html += f'''
 </div></div>
 <script>
 let c=0,t={count},ans={{}},s=false;
-function load(){{
-    try {{
-        let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');
-        if(d){{
-            let p=JSON.parse(d);
-            ans=p.a||{{}};
-            c=p.c||0;
-        }}
-    }} catch(e) {{
-        console.error('Error loading progress:', e);
-        c = 0; // Fallback to start
-    }}
-    // Ensure c is within bounds
-    if(c < 0 || c >= t) c = 0;
-    show(c);
-}}
+function load(){{let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}show(c)}}
 function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:c,a:ans}}))}}
 function show(i){{
-    document.querySelectorAll('.question').forEach(q=>q.style.display='none');
-    let qElem = document.getElementById('q'+i);
-    if(qElem) {{
-        qElem.style.display='block';
-    }} else {{
-        console.error('Question q'+i+' not found');
-        return;
-    }}
-    document.getElementById('counter').textContent='Q '+(i+1)+'/'+t;
-    document.getElementById('prev').disabled=i===0;
-    document.getElementById('next').disabled=i===t-1;
-    document.getElementById('prog').style.width=((i+1)/t*100)+'%';
-    s=false;
-    let ansElem = document.getElementById('a'+i);
-    if(ansElem) ansElem.classList.add('hidden');
-    document.getElementById('show').textContent='Show Answer';
-    c=i;save();
+document.querySelectorAll('.question').forEach(q=>q.style.display='none');
+document.getElementById('q'+i).style.display='block';
+document.getElementById('counter').textContent='Q '+(i+1)+'/'+t;
+document.getElementById('prev').disabled=i===0;
+document.getElementById('next').disabled=i===t-1;
+document.getElementById('prog').style.width=((i+1)/t*100)+'%';
+s=false;document.getElementById('a'+i).classList.add('hidden');
+document.getElementById('show').textContent='Show Answer';
+c=i;save();
 }}
 function next(){{if(c<t-1)show(c+1)}}
 function prev(){{if(c>0)show(c-1)}}
@@ -499,7 +446,7 @@ if(e.key==='ArrowRight')next();
 else if(e.key==='ArrowLeft')prev();
 else if(e.key===' '){{e.preventDefault();toggle()}}
 }});
-window.onload = load;
+window.onload=load;
 </script>
 </body></html>'''
     
@@ -545,7 +492,7 @@ def parse_folder_name(folder_name: str) -> Dict[str, int]:
     return None
 
 def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]:
-    """Extract content from HTML files using BeautifulSoup with support for multiple choice formats"""
+    """Extract content from HTML files using BeautifulSoup with proper formatting"""
     soup = BeautifulSoup(html_content, 'html.parser')
     result = {}
     
@@ -570,7 +517,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         choices = {}
         correct_answer = None
         
-        # FORMAT 1: multi-choice-item (existing format)
+        # Find all multi-choice items
         choice_items = soup.find_all('li', class_='multi-choice-item')
         
         if choice_items:
@@ -607,7 +554,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         # Try Format 3: No span, letter is direct text (e.g., "A. Choice text")
                         full_text = item.get_text(separator=' ', strip=True)
                         # Match pattern: "A. text" or "A. text"
-                        match = re.match(r'^([A-Z])\.\\s*(.*)', full_text)
+                        match = re.match(r'^([A-Z])\.\s*(.*)', full_text)
                         if match:
                             letter = match.group(1)
                             choice_text = match.group(2).strip()
@@ -624,57 +571,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                     elif first_span:
                         correct_answer = first_span.get_text(strip=True).rstrip('.')
         
-        # FORMAT 2: question-options (NEW - handles your HTML format)
-        # If no multi-choice-item found, try question-options format
-        if not choices:
-            question_options_div = soup.find('div', class_='question-options')
-            if question_options_div:
-                # Find all list items with letter prefix
-                option_items = question_options_div.find_all('li')
-                for item in option_items:
-                    letter = None
-                    choice_text = None
-                    
-                    # Strategy 1: Check for span containing the letter (e.g., <span>A.</span>)
-                    letter_span = item.find('span')
-                    if letter_span:
-                        span_text = letter_span.get_text(strip=True).rstrip('.')
-                        if len(span_text) == 1 and span_text.isalpha():
-                            letter = span_text
-                            # Remove the span to get the rest of the text clean
-                            letter_span.decompose()
-                            choice_text = item.get_text(separator=' ', strip=True)
-                    
-                    # Strategy 2: Fallback to regex on full text if no valid span found
-                    if not letter:
-                        full_text = item.get_text(separator=' ', strip=True)
-                        # Matches "A. Text", "A) Text", or just "A Text" if clear
-                        match = re.match(r'^([A-Z])[\.\)\s]\s*(.*)', full_text)
-                        if match:
-                            letter = match.group(1)
-                            choice_text = match.group(2)
-
-                    if letter and choice_text:
-                        # Clean up the text
-                        choice_text = ' '.join(choice_text.split())
-                        choices[letter] = choice_text
-                        
-        if not choices and content_type == 'question':
-            # Fallback: Try to extract options from question text if they're inline
-            question_div = soup.find('div', class_='question')
-            if question_div:
-                question_text = question_div.get_text()
-                # Look for pattern: A. text B. text C. text D. text
-                # This regex finds letter-dot-text patterns
-                option_pattern = r'\b([A-D])\.\s+([^\n]+?)(?=\s+[A-D]\.|$)'
-                matches = re.findall(option_pattern, question_text, re.MULTILINE | re.DOTALL)
-                
-                if matches:
-                    for letter, text in matches:
-                        text = text.strip()
-                        if text and not text.startswith('Question'):  # Avoid capturing "A. Use features..."
-                            choices[letter] = text
-
         result['choices'] = choices
         if correct_answer:
             result['correct_answer'] = correct_answer
@@ -685,17 +581,12 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         if answer_div:
             # Keep HTML format
             answer_html = answer_div.decode_contents()  # Gets content WITHOUT the div wrapper
-            html_str = str(answer_html).strip()
-            # FIX: Remove stray closing div tags if they were captured
-            if html_str.endswith('</div>'):
-                html_str = html_str[:-6].strip()
-
-            result['suggested_answer_html'] = html_str
+            result['suggested_answer_html'] = str(answer_html)
 
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
-            match = re.search(r'Suggested Answer[:\\s]+([A-Z])', suggested_answer_text)
+            match = re.search(r'Suggested Answer[:\s]+([A-Z])', suggested_answer_text)
             if match:
                 result['suggested_answer'] = match.group(1)
             else:
@@ -754,6 +645,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 result['ai_citations'] = citations
     
     return result
+
 
 
 def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
@@ -1371,66 +1263,10 @@ def study_exam_page():
 
     st.markdown("---")
 
-    # ENHANCED: Navigation, Question Selector, and Answer Toggle Buttons at TOP
+    # Display current question
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
 
-    # Initialize show_answer state for this question
-    if question_id not in st.session_state.show_answer:
-        st.session_state.show_answer[question_id] = False
-
-    # Top button row with 5 columns (added question selector)
-    col1, col2, col3, col4, col5 = st.columns([1, 1, 1.2, 1, 0.8])
-
-    with col1:
-        if current_idx > 0:
-            if st.button("⬅️ Previous", key=f"prev_top_{question_id}", use_container_width=True):
-                st.session_state.current_question_index -= 1
-                st.rerun()
-        else:
-            st.button("⬅️ Previous", key=f"prev_top_disabled_{question_id}", use_container_width=True, disabled=True)
-
-    with col2:
-        if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", key=f"next_top_{question_id}", use_container_width=True):
-                st.session_state.current_question_index += 1
-                st.rerun()
-        else:
-            if st.button("🎉 Finish", key=f"finish_top_{question_id}", use_container_width=True, type="primary"):
-                st.success("🎉 Congratulations! You've completed all questions!")
-                st.balloons()
-
-    with col3:
-        # Question selector - allows jumping to any question
-        selected_question = st.selectbox(
-            "Jump to Question:",
-            options=list(range(1, len(questions) + 1)),
-            index=current_idx,
-            key=f"question_selector_{question_id}",
-            label_visibility="collapsed",
-            help="Select a question number to jump directly to it"
-        )
-        if selected_question - 1 != current_idx:
-            st.session_state.current_question_index = selected_question - 1
-            st.rerun()
-
-    with col4:
-        if not st.session_state.show_answer[question_id]:
-            if st.button("💡 Show Answer", key=f"show_top_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = True
-                st.rerun()
-        else:
-            if st.button("🔒 Hide Answer", key=f"hide_top_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = False
-                st.rerun()
-
-    with col5:
-        # Empty column for spacing or future use
-        st.write("")
-
-    st.markdown("---")
-
-    # Display current question
     st.markdown(f"## {question['question_name']}")
 
     # Question content
@@ -1438,10 +1274,10 @@ def study_exam_page():
         # Get and deduplicate question text
         question_text = question.get('question', 'No question text available')
         question_text = remove_duplicate_chunks(question_text)
-
+        
         # Convert to HTML with line breaks
         question_html = question_text.replace('\n', '<br>')
-
+        
         # Display question with clean styled HTML (white background, colored border)
         styled_question = f"""
         <div class="question-text" style="
@@ -1468,127 +1304,126 @@ def study_exam_page():
         # Display answer choices if they exist with HTML styling
         if question.get('choices'):
             st.markdown("### Answer Options:")
-
+            
             # Create styled options HTML
             for letter, text in sorted(question['choices'].items()):
-                is_correct = (letter == question.get('suggested_answer') or 
-                             letter == question.get('correct_answer'))
-
+                is_correct = (letter == question.get('suggested_answer', '') or 
+                            letter == question.get('correct_answer', ''))
+                
                 # Show correct answer with green styling when answer is shown
-                if st.session_state.show_answer.get(question_id, False) and is_correct:
+                if st.session_state.show_answer.get(current_idx, False) and is_correct:
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #28a745;
-                        background: #d4edda;
                         border-radius: 10px;
-                        font-weight: 500;
+                        background: white;
+                        box-shadow: 0 2px 4px rgba(40,167,69,0.15);
                     ">
-                        <strong>{letter}.</strong> {text}
+                        <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #155724;">{text}</span> 
+                        <strong style="color: #28a745; float: right;">✓</strong>
                     </div>
                     """
+                    st.markdown(option_html, unsafe_allow_html=True)
                 else:
+                    # Regular option styling
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #e9ecef;
-                        background: white;
                         border-radius: 10px;
+                        background: white;
+                        transition: all 0.3s;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                     ">
-                        <strong>{letter}.</strong> {text}
+                        <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
+                        <span style="color: #495057;">{text}</span>
                     </div>
                     """
-                st.markdown(option_html, unsafe_allow_html=True)
+                    st.markdown(option_html, unsafe_allow_html=True)
+                    
+        elif question.get('question_type') == 'hotspot':
+            # For HOTSPOT questions, show prompt if available
+            if question.get('hotspot_prompt'):
+                st.info(f"📝 {question['hotspot_prompt']}")
+
+    # Show answer section
+    st.markdown("---")
+
+
+    if question_id not in st.session_state.show_answer:
+        st.session_state.show_answer[question_id] = False
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        if not st.session_state.show_answer[question_id]:
+            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = True
+                st.rerun()
+        else:
+            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = False
+                st.rerun()
 
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
         with st.container():
-            # # Show answer images only here
-            # if question.get('answer_images'):
-            #     for img_file in question['answer_images']:
-            #         img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
-            #         if img_path.exists():
-            #             st.image(str(img_path))
+            # Show answer images only here
+            if question.get('answer_images'):
+                for img_file in question['answer_images']:
+                    img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
+                    if img_path.exists():
+                        st.image(str(img_path))
 
-            # Suggested Answer with HTML support
-            if question.get('suggested_answer_html'):
-                st.markdown("### ✅ Suggested Answer")
+        # Suggested Answer
+        if 'suggested_answer' in question or 'correct_answer' in question:
+            st.markdown("#### ✅ Suggested Answer")
+            answer = question.get('suggested_answer') or question.get('correct_answer')
+            st.markdown(f"**Answer: {answer}**")
+            if answer in question.get('choices', {}):
+                st.markdown(f"*{question['choices'][answer]}*")
 
-                # Convert HTML images to base64
-                folder_prefix = f"topic_{question['topic_index']}_question_{question['question_index']}"
-                answer_html_converted = convert_html_images_to_base64(
-                    question['suggested_answer_html'], 
-                    exam_name, 
-                    folder_prefix
-                )
+        # Show discussion - RENDER HTML
+        if question.get('discussion_summary_html'):
+            st.markdown("### 💬 Discussion")
+            st.markdown(question['discussion_summary_html'], unsafe_allow_html=True)
 
-                answer_styled = f"""
-                <div class="answer" style="
-                    margin-top: 24px;
-                    padding: 20px;
-                    background: #f8f9fa;
-                    border-radius: 10px;
-                    border-left: 4px solid #28a745;
-                ">
-                    {answer_html_converted}
-                </div>
-                """
-                st.markdown(answer_styled, unsafe_allow_html=True)
-            elif question.get('suggested_answer'):
-                st.success(f"**Answer:** {question['suggested_answer']}")
+        # Show AI recommendation - RENDER HTML
+        if question.get('ai_recommendation_html'):
+            # st.markdown("### 🤖 AI Recommendation")  
+            st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
 
-            # Discussion Summary with HTML support
-            if question.get('discussion_summary_html'):
-                st.markdown("### 💬 Discussion")
+            # Citations
+            if 'ai_citations' in question and question['ai_citations']:
+                st.markdown("**References:**")
+                for citation in question['ai_citations']:
+                    st.markdown(f"- {citation}")
 
-                # Convert HTML images to base64
-                discussion_html_converted = convert_html_images_to_base64(
-                    question['discussion_summary_html'], 
-                    exam_name, 
-                    folder_prefix
-                )
+    # Navigation
+    st.markdown("---")
+    col1, col2, col3 = st.columns([1, 2, 1])
 
-                discussion_styled = f"""
-                <div class="discussion" style="
-                    margin: 16px 0;
-                    padding: 20px;
-                    background: white;
-                    border-radius: 10px;
-                    border-left: 4px solid #667eea;
-                    line-height: 1.7;
-                ">
-                    {discussion_html_converted}
-                </div>
-                """
-                st.markdown(discussion_styled, unsafe_allow_html=True)
+    with col1:
+        if current_idx > 0:
+            if st.button("⬅️ Previous", use_container_width=True):
+                st.session_state.current_question_index -= 1
+                st.rerun()
 
-            # AI Recommendation with HTML support
-            if question.get('ai_recommendation_html'):
-                st.markdown("### 🤖 AI Recommendation")
+    with col3:
+        if current_idx < len(questions) - 1:
+            if st.button("Next ➡️", use_container_width=True):
+                st.session_state.current_question_index += 1
+                st.rerun()
+        else:
+            if st.button("🎉 Finish", use_container_width=True, type="primary"):
+                st.success("🎉 Congratulations! You've completed all questions!")
+                st.balloons()
 
-                # Convert HTML images to base64
-                ai_html_converted = convert_html_images_to_base64(
-                    question['ai_recommendation_html'], 
-                    exam_name, 
-                    folder_prefix
-                )
-
-                ai_styled = f"""
-                <div class="ai-answer" style="
-                    margin: 16px 0;
-                    padding: 20px;
-                    background: white;
-                    border-radius: 10px;
-                    border-left: 4px solid #764ba2;
-                    line-height: 1.7;
-                ">
-                    {ai_html_converted}
-                </div>
-                """
-                st.markdown(ai_styled, unsafe_allow_html=True)
-
+# ============= MAIN APPLICATION =============
 
 def main():
     """Main application entry point"""
