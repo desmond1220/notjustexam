@@ -110,6 +110,10 @@ def is_exam_authenticated(exam_name: str) -> bool:
 def image_to_base64(image_path: str) -> str:
     """Convert image to base64 for embedding"""
     try:
+        if not Path(image_path).exists():
+            print(f"Warning: Image not found: {image_path}")
+            return ""
+        
         with open(image_path, 'rb') as f:
             image_data = f.read()
             base64_data = base64.b64encode(image_data).decode('utf-8')
@@ -118,7 +122,8 @@ def image_to_base64(image_path: str) -> str:
                          '.png': 'image/png', '.gif': 'image/gif'}
             mime_type = mime_types.get(ext, 'image/jpeg')
             return f"data:{mime_type};base64,{base64_data}"
-    except:
+    except Exception as e:
+        print(f"Error converting image {image_path}: {e}")
         return ""
 
 
@@ -361,8 +366,8 @@ body{{padding:4px}}
             img_path = DATA_DIR / exam_name / "images" / img_file
             if img_path.exists():
                 b64 = image_to_base64(str(img_path))
-                if b64:
-                    imgs += f'<img src="{b64}">'
+                if b64:  # Only add if conversion succeeded
+                    imgs += f'<img src="{b64}" alt="Question image">'
         
         # Embed answer images (same mechanism as Streamlit - use answer_images)
         answer_imgs = ""
@@ -371,8 +376,8 @@ body{{padding:4px}}
                 img_path = DATA_DIR / exam_name / "images" / img_file
                 if img_path.exists():
                     b64 = image_to_base64(str(img_path))
-                    if b64:
-                        answer_imgs += f'<img src="{b64}">'
+                    if b64:  # Only add if conversion succeeded
+                        answer_imgs += f'<img src="{b64}" alt="Answer image">'
         
         # Get HTML content (no conversion needed - images are separate)
         answer_html = q.get('suggested_answer_html', '')
@@ -434,15 +439,23 @@ function load(){{
 }}
 function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:c,a:ans}}))}}
 function show(i){{
-document.querySelectorAll('.question').forEach(q=>q.style.display='none');
-document.getElementById('q'+i).style.display='block';
-document.getElementById('counter').textContent='Q '+(i+1)+'/'+t;
-document.getElementById('prev').disabled=i===0;
-document.getElementById('next').disabled=i===t-1;
-document.getElementById('prog').style.width=((i+1)/t*100)+'%';
-s=false;document.getElementById('a'+i).classList.add('hidden');
-document.getElementById('show').textContent='Show Answer';
-c=i;save();
+    document.querySelectorAll('.question').forEach(q=>q.style.display='none');
+    let qElem = document.getElementById('q'+i);
+    if(qElem) {{
+        qElem.style.display='block';
+    }} else {{
+        console.error('Question q'+i+' not found');
+        return;
+    }}
+    document.getElementById('counter').textContent='Q '+(i+1)+'/'+t;
+    document.getElementById('prev').disabled=i===0;
+    document.getElementById('next').disabled=i===t-1;
+    document.getElementById('prog').style.width=((i+1)/t*100)+'%';
+    s=false;
+    let ansElem = document.getElementById('a'+i);
+    if(ansElem) ansElem.classList.add('hidden');
+    document.getElementById('show').textContent='Show Answer';
+    c=i;save();
 }}
 function next(){{if(c<t-1)show(c+1)}}
 function prev(){{if(c>0)show(c-1)}}
