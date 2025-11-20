@@ -648,7 +648,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 question_text = question_div.get_text()
                 # Look for pattern: A. text B. text C. text D. text
                 # This regex finds letter-dot-text patterns
-                import re
                 option_pattern = r'\b([A-D])\.\s+([^\n]+?)(?=\s+[A-D]\.|$)'
                 matches = re.findall(option_pattern, question_text, re.MULTILINE | re.DOTALL)
                 
