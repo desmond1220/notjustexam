@@ -580,18 +580,32 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 # Find all list items with letter prefix
                 option_items = question_options_div.find_all('li')
                 for item in option_items:
-                    # Get all text content and parse it
-                    full_text = item.get_text(separator=' ', strip=True)
+                    letter = None
+                    choice_text = None
                     
-                    # Try to extract letter (A, B, C, D format)
-                    # Format: "A. Text here" or "<span>A.</span> Text here"
-                    match = re.match(r'^([A-Z])\.\\s*(.*)', full_text)
-                    if match:
-                        letter = match.group(1)
-                        choice_text = match.group(2).strip()
-                        choice_text = ' '.join(choice_text.split())  # Clean whitespace
-                        if letter and choice_text:
-                            choices[letter] = choice_text
+                    # Strategy 1: Check for span containing the letter (e.g., <span>A.</span>)
+                    letter_span = item.find('span')
+                    if letter_span:
+                        span_text = letter_span.get_text(strip=True).rstrip('.')
+                        if len(span_text) == 1 and span_text.isalpha():
+                            letter = span_text
+                            # Remove the span to get the rest of the text clean
+                            letter_span.decompose()
+                            choice_text = item.get_text(separator=' ', strip=True)
+                    
+                    # Strategy 2: Fallback to regex on full text if no valid span found
+                    if not letter:
+                        full_text = item.get_text(separator=' ', strip=True)
+                        # Matches "A. Text", "A) Text", or just "A Text" if clear
+                        match = re.match(r'^([A-Z])[\.\)\s]\s*(.*)', full_text)
+                        if match:
+                            letter = match.group(1)
+                            choice_text = match.group(2)
+
+                    if letter and choice_text:
+                        # Clean up the text
+                        choice_text = ' '.join(choice_text.split())
+                        choices[letter] = choice_text
         
         result['choices'] = choices
         if correct_answer:
