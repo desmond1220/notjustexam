@@ -347,8 +347,7 @@ body{{padding:4px}}
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=150)
         # Just use text as-is with basic line break formatting
-        import html as html_lib
-        formatted_text = html_lib.escape(text).replace('\n', '<br>')
+        formatted_text = text.replace('\n', '<br>')
 
         # FIX: If choices are empty, try to extract from question text
         if not choices and text:
