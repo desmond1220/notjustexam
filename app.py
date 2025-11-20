@@ -1437,12 +1437,12 @@ def study_exam_page():
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
         with st.container():
-            # Show answer images only here
-            if question.get('answer_images'):
-                for img_file in question['answer_images']:
-                    img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
-                    if img_path.exists():
-                        st.image(str(img_path))
+            # # Show answer images only here
+            # if question.get('answer_images'):
+            #     for img_file in question['answer_images']:
+            #         img_path = DATA_DIR / st.session_state.selected_exam / "images" / img_file
+            #         if img_path.exists():
+            #             st.image(str(img_path))
 
             # Suggested Answer with HTML support
             if question.get('suggested_answer_html'):
