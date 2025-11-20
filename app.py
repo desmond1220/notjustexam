@@ -601,7 +601,8 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         # FORMAT 2: question-options (NEW - handles your HTML format)
         # If no multi-choice-item found, try question-options format
         if not choices:
-            question_options_div = soup.find('div', class_='question-options')
+            question_options_div = soup.find('div', class_='question-options') or \
+                                   soup.find('div', class_='question-choices-container')
             if question_options_div:
                 # Find all list items with letter prefix
                 option_items = question_options_div.find_all('li')
