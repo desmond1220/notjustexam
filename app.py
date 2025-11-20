@@ -335,6 +335,7 @@ body{{padding:4px}}
 <div style="height:4px;background:#e9ecef"><div class="progress-bar" id="prog" style="width:0%"></div></div>
 <div id="qs">'''
     
+    
     # Add questions
     for i, q in enumerate(questions):
         topic = q.get('topic_index', 1)
@@ -355,6 +356,8 @@ body{{padding:4px}}
             for letter, choice in sorted(choices.items()):
                 correct = "true" if letter == ans else "false"
                 opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
+        else:
+            opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ No answer options available for this question. Options may be embedded in the question text.</div>'
         # elif q.get('question_type') == 'hotspot':
         #     opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
         # else:
@@ -637,7 +640,24 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                         # Clean up the text
                         choice_text = ' '.join(choice_text.split())
                         choices[letter] = choice_text
-        
+                        
+        if not choices and content_type == 'question':
+            # Fallback: Try to extract options from question text if they're inline
+            question_div = soup.find('div', class_='question')
+            if question_div:
+                question_text = question_div.get_text()
+                # Look for pattern: A. text B. text C. text D. text
+                # This regex finds letter-dot-text patterns
+                import re
+                option_pattern = r'\b([A-D])\.\s+([^\n]+?)(?=\s+[A-D]\.|$)'
+                matches = re.findall(option_pattern, question_text, re.MULTILINE | re.DOTALL)
+                
+                if matches:
+                    for letter, text in matches:
+                        text = text.strip()
+                        if text and not text.startswith('Question'):  # Avoid capturing "A. Use features..."
+                            choices[letter] = text
+
         result['choices'] = choices
         if correct_answer:
             result['correct_answer'] = correct_answer
