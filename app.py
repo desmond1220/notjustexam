@@ -413,7 +413,15 @@ body{{padding:4px}}
 </div></div>
 <script>
 let c=0,t={count},ans={{}},s=false;
-function load(){{let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}show(c)}}
+function load(){{
+    let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');
+    if(d){{
+        let p=JSON.parse(d);
+        ans=p.a||{{}};
+        c=p.c||0;
+    }}
+    show(c);
+}}
 function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:c,a:ans}}))}}
 function show(i){{
 document.querySelectorAll('.question').forEach(q=>q.style.display='none');
@@ -447,7 +455,7 @@ if(e.key==='ArrowRight')next();
 else if(e.key==='ArrowLeft')prev();
 else if(e.key===' '){{e.preventDefault();toggle()}}
 }});
-window.onload=load;
+window.onload = load;
 </script>
 </body></html>'''
     
