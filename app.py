@@ -69,23 +69,6 @@ st.markdown("""
         margin: 8px 0;
         list-style-type: disc;
     }
-
-    .sticky-nav {
-        position: sticky;
-        top: 0;
-        z-index: 999;
-        background: white;
-        padding: 16px 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 20px;
-    }
-    .nav-button-container {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding: 0 20px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -422,7 +405,8 @@ body{{padding:4px}}
         if ai_html:
             html += f'<div class="answer-content"><h5>🤖 AI Recommendation</h5><div style="padding:10px">{ai_html}</div></div>'
 
-        html += '</div>\n</div>\n'
+        # html += '</div>\n</div>\n'
+        html += '</div>'
 
     # Add JavaScript
     html += f'''
@@ -594,7 +578,6 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             question_options_div = soup.find('div', class_='question-options')
             if question_options_div:
                 # Find all list items with letter prefix
-                print("question_options_div")
                 option_items = question_options_div.find_all('li')
                 for item in option_items:
                     # Get all text content and parse it
@@ -602,15 +585,13 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                     
                     # Try to extract letter (A, B, C, D format)
                     # Format: "A. Text here" or "<span>A.</span> Text here"
-                    match = re.match(r'^([A-Z])\.\s*(.*)', full_text)
-                    print(match)
+                    match = re.match(r'^([A-Z])\.\\s*(.*)', full_text)
                     if match:
                         letter = match.group(1)
                         choice_text = match.group(2).strip()
                         choice_text = ' '.join(choice_text.split())  # Clean whitespace
                         if letter and choice_text:
                             choices[letter] = choice_text
-                    print(choices)
         
         result['choices'] = choices
         if correct_answer:
@@ -1308,37 +1289,66 @@ def study_exam_page():
 
     st.markdown("---")
 
-    # Sticky Navigation at Top
-    st.markdown('<div class="sticky-nav">', unsafe_allow_html=True)
-    nav_col1, nav_col2, nav_col3 = st.columns([1, 2, 1])
-
-    with nav_col1:
-        if current_idx > 0:
-            if st.button("⬅️ Previous", key=f"prev_top_{current_idx}", use_container_width=True):
-                st.session_state.current_question_index -= 1
-                st.rerun()
-
-    with nav_col2:
-        st.markdown(f'<div style="text-align: center; padding: 8px;">Question {current_idx + 1} of {len(questions)}</div>', unsafe_allow_html=True)
-
-    with nav_col3:
-        if current_idx < len(questions) - 1:
-            if st.button("Next ➡️", key=f"next_top_{current_idx}", use_container_width=True):
-                st.session_state.current_question_index += 1
-                st.rerun()
-        else:
-            if st.button("🎉 Finish", key=f"finish_top_{current_idx}", use_container_width=True, type="primary"):
-                st.success("🎉 Congratulations! You've completed all questions!")
-                st.balloons()
-
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.markdown("---")
-
-
-    # Display current question
+    # ENHANCED: Navigation, Question Selector, and Answer Toggle Buttons at TOP
     question = questions[current_idx]
     question_id = f"q_{question['topic_index']}_{question['question_index']}"
 
+    # Initialize show_answer state for this question
+    if question_id not in st.session_state.show_answer:
+        st.session_state.show_answer[question_id] = False
+
+    # Top button row with 5 columns (added question selector)
+    col1, col2, col3, col4, col5 = st.columns([1, 1, 1.2, 1, 0.8])
+
+    with col1:
+        if current_idx > 0:
+            if st.button("⬅️ Previous", key=f"prev_top_{question_id}", use_container_width=True):
+                st.session_state.current_question_index -= 1
+                st.rerun()
+        else:
+            st.button("⬅️ Previous", key=f"prev_top_disabled_{question_id}", use_container_width=True, disabled=True)
+
+    with col2:
+        if current_idx < len(questions) - 1:
+            if st.button("Next ➡️", key=f"next_top_{question_id}", use_container_width=True):
+                st.session_state.current_question_index += 1
+                st.rerun()
+        else:
+            if st.button("🎉 Finish", key=f"finish_top_{question_id}", use_container_width=True, type="primary"):
+                st.success("🎉 Congratulations! You've completed all questions!")
+                st.balloons()
+
+    with col3:
+        # Question selector - allows jumping to any question
+        selected_question = st.selectbox(
+            "Jump to Question:",
+            options=list(range(1, len(questions) + 1)),
+            index=current_idx,
+            key=f"question_selector_{question_id}",
+            label_visibility="collapsed",
+            help="Select a question number to jump directly to it"
+        )
+        if selected_question - 1 != current_idx:
+            st.session_state.current_question_index = selected_question - 1
+            st.rerun()
+
+    with col4:
+        if not st.session_state.show_answer[question_id]:
+            if st.button("💡 Show Answer", key=f"show_top_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = True
+                st.rerun()
+        else:
+            if st.button("🔒 Hide Answer", key=f"hide_top_{question_id}", use_container_width=True):
+                st.session_state.show_answer[question_id] = False
+                st.rerun()
+
+    with col5:
+        # Empty column for spacing or future use
+        st.write("")
+
+    st.markdown("---")
+
+    # Display current question
     st.markdown(f"## {question['question_name']}")
 
     # Question content
@@ -1346,10 +1356,10 @@ def study_exam_page():
         # Get and deduplicate question text
         question_text = question.get('question', 'No question text available')
         question_text = remove_duplicate_chunks(question_text)
-        
+
         # Convert to HTML with line breaks
         question_html = question_text.replace('\n', '<br>')
-        
+
         # Display question with clean styled HTML (white background, colored border)
         styled_question = f"""
         <div class="question-text" style="
@@ -1376,70 +1386,39 @@ def study_exam_page():
         # Display answer choices if they exist with HTML styling
         if question.get('choices'):
             st.markdown("### Answer Options:")
-            
+
             # Create styled options HTML
             for letter, text in sorted(question['choices'].items()):
-                is_correct = (letter == question.get('suggested_answer', '') or 
-                            letter == question.get('correct_answer', ''))
-                
+                is_correct = (letter == question.get('suggested_answer') or 
+                             letter == question.get('correct_answer'))
+
                 # Show correct answer with green styling when answer is shown
-                if st.session_state.show_answer.get(current_idx, False) and is_correct:
+                if st.session_state.show_answer.get(question_id, False) and is_correct:
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #28a745;
+                        background: #d4edda;
                         border-radius: 10px;
-                        background: white;
-                        box-shadow: 0 2px 4px rgba(40,167,69,0.15);
+                        font-weight: 500;
                     ">
-                        <strong style="color: #28a745; font-size: 1.1em;">{letter}.</strong> 
-                        <span style="color: #155724;">{text}</span> 
-                        <strong style="color: #28a745; float: right;">✓</strong>
+                        <strong>{letter}.</strong> {text}
                     </div>
                     """
-                    st.markdown(option_html, unsafe_allow_html=True)
                 else:
-                    # Regular option styling
                     option_html = f"""
                     <div style="
                         padding: 16px;
                         margin: 12px 0;
                         border: 2px solid #e9ecef;
-                        border-radius: 10px;
                         background: white;
-                        transition: all 0.3s;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                        border-radius: 10px;
                     ">
-                        <strong style="color: #667eea; font-size: 1.1em;">{letter}.</strong> 
-                        <span style="color: #495057;">{text}</span>
+                        <strong>{letter}.</strong> {text}
                     </div>
                     """
-                    st.markdown(option_html, unsafe_allow_html=True)
-                    
-        elif question.get('question_type') == 'hotspot':
-            # For HOTSPOT questions, show prompt if available
-            if question.get('hotspot_prompt'):
-                st.info(f"📝 {question['hotspot_prompt']}")
-
-    # Show answer section
-    st.markdown("---")
-
-
-    if question_id not in st.session_state.show_answer:
-        st.session_state.show_answer[question_id] = False
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if not st.session_state.show_answer[question_id]:
-            if st.button("💡 Show Answer", key=f"show_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = True
-                st.rerun()
-        else:
-            if st.button("🔒 Hide Answer", key=f"hide_{question_id}", use_container_width=True):
-                st.session_state.show_answer[question_id] = False
-                st.rerun()
+                st.markdown(option_html, unsafe_allow_html=True)
 
     # Display answer if shown
     if st.session_state.show_answer.get(question_id, False):
@@ -1451,33 +1430,83 @@ def study_exam_page():
                     if img_path.exists():
                         st.image(str(img_path))
 
-        # Suggested Answer
-        if 'suggested_answer' in question or 'correct_answer' in question:
-            st.markdown("#### ✅ Suggested Answer")
-            answer = question.get('suggested_answer') or question.get('correct_answer')
-            st.markdown(f"**Answer: {answer}**")
-            if answer in question.get('choices', {}):
-                st.markdown(f"*{question['choices'][answer]}*")
+            # Suggested Answer with HTML support
+            if question.get('suggested_answer_html'):
+                st.markdown("### ✅ Suggested Answer")
 
-        # Show discussion - RENDER HTML
-        if question.get('discussion_summary_html'):
-            st.markdown("### 💬 Discussion")
-            st.markdown(question['discussion_summary_html'], unsafe_allow_html=True)
+                # Convert HTML images to base64
+                folder_prefix = f"topic_{question['topic_index']}_question_{question['question_index']}"
+                answer_html_converted = convert_html_images_to_base64(
+                    question['suggested_answer_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
 
-        # Show AI recommendation - RENDER HTML
-        if question.get('ai_recommendation_html'):
-            # st.markdown("### 🤖 AI Recommendation")  
-            st.markdown(question['ai_recommendation_html'], unsafe_allow_html=True)
+                answer_styled = f"""
+                <div class="answer" style="
+                    margin-top: 24px;
+                    padding: 20px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    border-left: 4px solid #28a745;
+                ">
+                    {answer_html_converted}
+                </div>
+                """
+                st.markdown(answer_styled, unsafe_allow_html=True)
+            elif question.get('suggested_answer'):
+                st.success(f"**Answer:** {question['suggested_answer']}")
 
-            # Citations
-            if 'ai_citations' in question and question['ai_citations']:
-                st.markdown("**References:**")
-                for citation in question['ai_citations']:
-                    st.markdown(f"- {citation}")
+            # Discussion Summary with HTML support
+            if question.get('discussion_summary_html'):
+                st.markdown("### 💬 Discussion")
 
+                # Convert HTML images to base64
+                discussion_html_converted = convert_html_images_to_base64(
+                    question['discussion_summary_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
 
+                discussion_styled = f"""
+                <div class="discussion" style="
+                    margin: 16px 0;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    border-left: 4px solid #667eea;
+                    line-height: 1.7;
+                ">
+                    {discussion_html_converted}
+                </div>
+                """
+                st.markdown(discussion_styled, unsafe_allow_html=True)
 
-# ============= MAIN APPLICATION =============
+            # AI Recommendation with HTML support
+            if question.get('ai_recommendation_html'):
+                st.markdown("### 🤖 AI Recommendation")
+
+                # Convert HTML images to base64
+                ai_html_converted = convert_html_images_to_base64(
+                    question['ai_recommendation_html'], 
+                    exam_name, 
+                    folder_prefix
+                )
+
+                ai_styled = f"""
+                <div class="ai-answer" style="
+                    margin: 16px 0;
+                    padding: 20px;
+                    background: white;
+                    border-radius: 10px;
+                    border-left: 4px solid #764ba2;
+                    line-height: 1.7;
+                ">
+                    {ai_html_converted}
+                </div>
+                """
+                st.markdown(ai_styled, unsafe_allow_html=True)
+
 
 def main():
     """Main application entry point"""
