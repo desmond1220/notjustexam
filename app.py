@@ -350,6 +350,25 @@ body{{padding:4px}}
         import html as html_lib
         formatted_text = html_lib.escape(text).replace('\n', '<br>')
 
+        # FIX: If choices are empty, try to extract from question text
+        if not choices and text:
+            # Extract inline options (A. text, B. text, etc.)
+            option_pattern = r'([A-D])\.\s+(.+?)(?=\n[A-D]\.|$)'
+            matches = re.findall(option_pattern, text, re.MULTILINE | re.DOTALL)
+            
+            if matches:
+                for letter, choice_text in matches:
+                    choice_text = choice_text.strip()
+                    if choice_text and not choice_text.startswith('Question'):
+                        choices[letter] = choice_text
+                
+                # Clean the formatted_text to remove the inline options
+                # so they don't appear twice
+                for letter in choices.keys():
+                    # Remove "A. Option text" from formatted_text
+                    pattern = r'<br>' + letter + r'\.\s+.+?(?=<br>[A-D]\.|$)'
+                    formatted_text = re.sub(pattern, '', formatted_text, flags=re.DOTALL)
+
         # Build choices
         opts = ""
         if choices:
