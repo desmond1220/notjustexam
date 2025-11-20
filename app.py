@@ -347,7 +347,7 @@ body{{padding:4px}}
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
 
         # Remove duplicate chunks (if text was accidentally duplicated)
-        text = remove_duplicate_chunks(text, min_chunk_size=150)
+        text = remove_duplicate_chunks(text, min_chunk_size=100)
         # Just use text as-is with basic line break formatting
         formatted_text = text.replace('\n', '<br>')
 
