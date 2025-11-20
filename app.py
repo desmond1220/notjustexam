@@ -314,6 +314,8 @@ body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 .answer-content li{{margin:8px 0;line-height:1.7}}
 .hidden{{display:none}}
 img{{max-width:100%;height:auto;margin:16px 0;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}}
+select{{padding:10px 12px;border:2px solid #e9ecef;border-radius:8px;font-size:15px;background:white;cursor:pointer;min-width:100px}}
+select:focus{{outline:none;border-color:#667eea}}
 @media (max-width:768px){{
 body{{padding:4px}}
 .header h1{{font-size:22px}}
@@ -328,6 +330,7 @@ body{{padding:4px}}
 <div class="header"><h1>📚 {exam_title}</h1><div>{count} Questions | Offline Mode</div></div>
 <div class="nav">
 <button class="btn btn-secondary" onclick="prev()" id="prev">◀ Prev</button>
+<select id="qselect" class="btn" onchange="jump(this.value)"></select>
 <div id="counter">Q 1/{count}</div>
 <button class="btn btn-secondary" onclick="next()" id="next">Next ▶</button>
 <button class="btn btn-primary" onclick="toggle()" id="show">Show Answer</button>
@@ -417,12 +420,31 @@ body{{padding:4px}}
 </div></div>
 <script>
 let c=0,t={count},ans={{}},s=false;
-function load(){{let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}show(c)}}
+function load(){{
+let d=localStorage.getItem('e_{exam_name.replace(" ","_")}');
+if(d){{let p=JSON.parse(d);ans=p.a||{{}};c=p.c||0}}
+populateSelect();
+show(c);
+}}
+function populateSelect(){{
+let sel=document.getElementById('qselect');
+for(let i=0;i<t;i++){{
+let opt=document.createElement('option');
+opt.value=i;
+opt.text='Q '+(i+1);
+sel.appendChild(opt);
+}}
+}}
+function jump(idx){{
+show(parseInt(idx));
+}}
 function save(){{localStorage.setItem('e_{exam_name.replace(" ","_")}',JSON.stringify({{c:c,a:ans}}))}}
 function show(i){{
 document.querySelectorAll('.question').forEach(q=>q.style.display='none');
-document.getElementById('q'+i).style.display='block';
+let qElem=document.getElementById('q'+i);
+if(qElem)qElem.style.display='block';
 document.getElementById('counter').textContent='Q '+(i+1)+'/'+t;
+document.getElementById('qselect').value=i;
 document.getElementById('prev').disabled=i===0;
 document.getElementById('next').disabled=i===t-1;
 document.getElementById('prog').style.width=((i+1)/t*100)+'%';
