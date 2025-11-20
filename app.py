@@ -622,7 +622,12 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
         if answer_div:
             # Keep HTML format
             answer_html = answer_div.decode_contents()  # Gets content WITHOUT the div wrapper
-            result['suggested_answer_html'] = str(answer_html)
+            html_str = str(answer_html).strip()
+            # FIX: Remove stray closing div tags if they were captured
+            if html_str.endswith('</div>'):
+                html_str = html_str[:-6].strip()
+
+            result['suggested_answer_html'] = html_str
 
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
