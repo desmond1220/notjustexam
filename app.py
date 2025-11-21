@@ -271,6 +271,7 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
+    
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
     count = len(questions)
@@ -342,26 +343,35 @@ body{{padding:4px}}
         qnum = q.get('question_index', 1)
         text = q.get('question', 'No question')
         choices = q.get('choices', {})
+        
+        # Get the correct answer - handle both suggested_answer and correct_answer
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
-
-        # Normalize answer for comparison (handle lists, strings with spaces/commas)
-        ans_check = []
-        if isinstance(ans, list):
-            ans_check = [str(x).strip().upper() for x in ans]
-        elif isinstance(ans, str) and ans:
-            ans_check = [x.strip().upper() for x in ans.replace(' ', '').split(',')]
-
+        
+        # Normalize the correct answer: strip whitespace and convert to uppercase
+        # Handle None, empty strings, and various formats
+        if ans is None:
+            ans_normalized = ''
+        elif isinstance(ans, str):
+            ans_normalized = ans.strip().upper()
+        else:
+            ans_normalized = str(ans).strip().upper()
+        
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=100)
         formatted_text = text.replace('\n', '<br>')
 
-        # Build choices
+        # Build choices with corrected comparison logic
         opts = ""
         if choices:
             for letter, choice in sorted(choices.items()):
-                # Robust check: is this letter in the correct answer list?
-                is_correct = str(letter).strip().upper() in ans_check
+                # Normalize the choice letter for comparison
+                letter_normalized = str(letter).strip().upper()
+                
+                # Simple, robust comparison: normalized letter matches normalized answer
+                is_correct = (letter_normalized == ans_normalized)
                 correct_str = "true" if is_correct else "false"
+                
+                # Use original letter for display, normalized for data attribute
                 opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
         
         # Embed question images
@@ -411,7 +421,7 @@ body{{padding:4px}}
 
         html += '</div>\n</div>\n'
 
-    # Add JavaScript
+    # Add JavaScript with improved sel() function
     html += f'''
 </div></div>
 <script>
@@ -457,14 +467,21 @@ else{{a.classList.remove('hidden');b.textContent='Hide Answer'}}
 s=!s;
 }}
 function sel(e,q){{
+// Clear all previous styling
 e.parentElement.querySelectorAll('.option').forEach(o=>o.classList.remove('correct','wrong'));
+// Check if selected option is correct
 let cor=e.getAttribute('data-cor')==='true';
+// Apply correct styling to clicked option
 e.classList.add(cor?'correct':'wrong');
-// Fix: Check if correct option exists before accessing classList to prevent crash
-let trueOpt = e.parentElement.querySelector('[data-cor="true"]');
-if(!cor && trueOpt) trueOpt.classList.add('correct');
-ans[q]=e.getAttribute('data-opt');save();
-// Auto-show answer after selection
+// If wrong, also highlight the correct answer
+if(!cor){{
+let trueOpt=e.parentElement.querySelector('[data-cor="true"]');
+if(trueOpt)trueOpt.classList.add('correct');
+}}
+// Save user's selection
+ans[q]=e.getAttribute('data-opt');
+save();
+// Auto-show answer explanation after 500ms
 setTimeout(()=>{{if(!s)toggle()}},500);
 }}
 document.addEventListener('keydown',e=>{{
@@ -477,6 +494,7 @@ window.onload=load;
 </body></html>'''
     
     return html
+
 
 
 
