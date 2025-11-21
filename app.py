@@ -271,8 +271,6 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
 
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
-    
-    
     questions = exam_data['questions']
     exam_title = exam_data.get('exam_name', exam_name)
     count = len(questions)
@@ -346,23 +344,27 @@ body{{padding:4px}}
         choices = q.get('choices', {})
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
 
+        # Normalize answer for comparison (handle lists, strings with spaces/commas)
+        ans_check = []
+        if isinstance(ans, list):
+            ans_check = [str(x).strip().upper() for x in ans]
+        elif isinstance(ans, str) and ans:
+            ans_check = [x.strip().upper() for x in ans.replace(' ', '').split(',')]
+
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=100)
-        # Just use text as-is with basic line break formatting
         formatted_text = text.replace('\n', '<br>')
 
         # Build choices
         opts = ""
         if choices:
             for letter, choice in sorted(choices.items()):
-                correct = "true" if letter == ans else "false"
-                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
-        # elif q.get('question_type') == 'hotspot':
-        #     opts = '<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px">⚠️ This is a HOTSPOT/Hot Area question. View the answer below for the solution.</div>'
-        # else:
-        #     opts = '<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px">⚠️ No answer options available for this question.</div>'
-
-        # Embed question images (same as Streamlit)
+                # Robust check: is this letter in the correct answer list?
+                is_correct = str(letter).strip().upper() in ans_check
+                correct_str = "true" if is_correct else "false"
+                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
+        
+        # Embed question images
         imgs = ""
         for img_file in q.get('saved_images', []):
             img_path = DATA_DIR / exam_name / "images" / img_file
@@ -371,7 +373,7 @@ body{{padding:4px}}
                 if b64:
                     imgs += f'<img src="{b64}">'
         
-        # Embed answer images (same mechanism as Streamlit - use answer_images)
+        # Embed answer images
         answer_imgs = ""
         if q.get('answer_images'):
             for img_file in q['answer_images']:
@@ -381,11 +383,9 @@ body{{padding:4px}}
                     if b64:
                         answer_imgs += f'<img src="{b64}">'
         
-        # Get HTML content (no conversion needed - images are separate)
         answer_html = q.get('suggested_answer_html', '')
         disc_html = q.get('discussion_summary_html', '')
         ai_html = q.get('ai_recommendation_html', '')
-
 
         html += f'''
 <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
@@ -395,19 +395,15 @@ body{{padding:4px}}
 <div>{opts}</div>
 <div class="answer hidden" id="a{i}">'''
         
-        # If we have HTML answer with detailed content, use that instead of just the letter
         if answer_html:
             soup = BeautifulSoup(answer_html, 'html.parser')
-            # Find and remove all img tags
             for img_tag in soup.find_all('img'):
-                img_tag.decompose()  # Remove the tag completely
+                img_tag.decompose()
             answer_html = str(soup).replace("Suggested Answer:", "")
             html += f'<div class="answer-content"><h5>✅ Suggested Answer</h5><div style="padding:10px">{answer_imgs}{answer_html}</div></div>'
         else:
-            # Fallback to simple answer letter if no HTML
             html += f'<h4>✅ Answer: {ans}</h4>'
 
-        # Add discussion and AI sections
         if disc_html:
             html += f'<div class="answer-content"><h5>💬 Discussion</h5><div style="padding:10px">{disc_html}</div></div>'
         if ai_html:
@@ -464,8 +460,11 @@ function sel(e,q){{
 e.parentElement.querySelectorAll('.option').forEach(o=>o.classList.remove('correct','wrong'));
 let cor=e.getAttribute('data-cor')==='true';
 e.classList.add(cor?'correct':'wrong');
-if(!cor)e.parentElement.querySelector('[data-cor="true"]').classList.add('correct');
+// Fix: Check if correct option exists before accessing classList to prevent crash
+let trueOpt = e.parentElement.querySelector('[data-cor="true"]');
+if(!cor && trueOpt) trueOpt.classList.add('correct');
 ans[q]=e.getAttribute('data-opt');save();
+// Auto-show answer after selection
 setTimeout(()=>{{if(!s)toggle()}},500);
 }}
 document.addEventListener('keydown',e=>{{
