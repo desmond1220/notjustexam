@@ -392,9 +392,6 @@ body{{padding:4px}}
 <body>
 <div class="container">
 <div class="header"><h1>📚 {exam_title}</h1><div>{count} Questions | Offline Mode</div>
-<div class="last-updated">
-    📅 Last Updated: {last_updated}
-</div>
 </div>
 <div class="nav">
 <button class="btn btn-secondary" onclick="prev()" id="prev">◀ Prev</button>
@@ -929,44 +926,60 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
         folders = extract_zip_file(zip_file, temp_path)
-        
+
+        # Try to load metadata if it exists in the ZIP
+        metadata_map = {}
+        if 'upload_metadata.json' in folders:
+            try:
+                metadata_content = folders['upload_metadata.json']
+                if isinstance(metadata_content, bytes):
+                    metadata_content = metadata_content.decode('utf-8')
+                metadata = json.loads(metadata_content)
+
+                # Create a map of folder_name -> metadata
+                for q_meta in metadata.get('questions', []):
+                    folder_name = q_meta.get('folder_name')
+                    if folder_name:
+                        metadata_map[folder_name] = q_meta
+
+                st.info(f"📋 Loaded metadata for {len(metadata_map)} questions from upload_metadata.json")
+            except Exception as e:
+                st.warning(f"Could not parse upload_metadata.json: {e}")
+
         for folder_name, files in folders.items():
-            folder_info = parse_folder_name(folder_name)
-            if not folder_info:
+            # Skip the metadata file itself
+            if folder_name == 'upload_metadata.json':
                 continue
-            
-            question_data = {
-                "topic_index": folder_info["topic_index"],
-                "question_index": folder_info["question_index"],
-                "question_name": f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
-            }
-            
-            # Calculate last modified time for this folder's files
-            latest_time = 0
-            for file_name, file_content in files.items():
-                # Get the timestamp from uploaded files (or use current time as fallback)
-                try:
-                    # For ZIP files, we'll use current time, but mark that it was just uploaded
-                    current_time = time.time()
-                    if current_time > latest_time:
-                        latest_time = current_time
-                except:
-                    pass
-            
-            if latest_time > 0:
-                question_data["last_updated"] = datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
-            else:
-                question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
+
             folder_info = parse_folder_name(folder_name)
             if not folder_info:
                 continue
 
             question_data = {
-                'topic_index': folder_info['topic_index'],
-                'question_index': folder_info['question_index'],
-                'question_name': f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
+                "topic_index": folder_info["topic_index"],
+                "question_index": folder_info["question_index"],
+                "question_name": f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
             }
+
+            # Get last_updated from metadata if available, otherwise calculate from files
+            if folder_name in metadata_map:
+                question_data["last_updated"] = metadata_map[folder_name].get('last_updated', 'Unknown')
+            else:
+                # Fallback: Calculate last modified time for this folder's files
+                latest_time = 0
+                for file_name, file_content in files.items():
+                    try:
+                        # For ZIP files without metadata, use current upload time
+                        current_time = time.time()
+                        if current_time > latest_time:
+                            latest_time = current_time
+                    except:
+                        pass
+
+                if latest_time > 0:
+                    question_data["last_updated"] = datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Process summary_question.html
             if 'summary_question.html' in files:

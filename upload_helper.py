@@ -1,13 +1,75 @@
 """
 File Upload Helper Script (Enhanced)
+
 This script helps prepare your question folders for upload to NotJustExam
-Now with automatic ZIP file creation for easy uploads!
+
+Now with automatic ZIP file creation and last_updated timestamp tracking!
 """
 
 import os
 import shutil
 from pathlib import Path
 import zipfile
+import json
+from datetime import datetime
+
+def get_folder_last_modified(folder_path: Path) -> str:
+    """
+    Get the last modified timestamp of the most recently modified file in a folder
+
+    Args:
+        folder_path: Path to the folder to check
+
+    Returns:
+        ISO formatted timestamp string or None if no files found
+    """
+    if not folder_path.exists():
+        return None
+
+    latest_time = 0
+
+    # Check all files in this folder
+    for file_path in folder_path.rglob('*'):
+        if file_path.is_file():
+            try:
+                mtime = os.path.getmtime(file_path)
+                if mtime > latest_time:
+                    latest_time = mtime
+            except OSError:
+                continue
+
+    if latest_time == 0:
+        return None
+
+    return datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
+
+def create_question_metadata(folder_path: Path) -> dict:
+    """
+    Create metadata for a question folder including last_updated timestamp
+
+    Args:
+        folder_path: Path to the question folder
+
+    Returns:
+        Dictionary with metadata including last_updated
+    """
+    metadata = {
+        "folder_name": folder_path.name,
+        "last_updated": get_folder_last_modified(folder_path) or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    # Check for HTML files
+    has_question = (folder_path / 'summary_question.html').exists()
+    has_discussion = (folder_path / 'summary_discussion_ai.html').exists()
+
+    metadata["has_question"] = has_question
+    metadata["has_discussion"] = has_discussion
+
+    # Count images
+    image_files = list(folder_path.glob('image_*.png')) + list(folder_path.glob('image_*.jpg'))
+    metadata["image_count"] = len(image_files)
+
+    return metadata
 
 def create_upload_package(source_dir: str, output_dir: str = "upload_package", create_zip: bool = True):
     """
@@ -38,11 +100,16 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
 
     total_questions = 0
     total_images = 0
+    metadata_list = []
 
     # Process each folder
     for folder in topic_folders:
         folder_name = folder.name
         print(f"Processing: {folder_name}")
+
+        # Create metadata for this question
+        metadata = create_question_metadata(folder)
+        metadata_list.append(metadata)
 
         # Create output folder
         output_folder = output_path / folder_name
@@ -53,9 +120,9 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
             source_file = folder / html_file
             if source_file.exists():
                 shutil.copy2(source_file, output_folder / html_file)
-                print(f"  ✓ Copied {html_file}")
+                print(f"   ✓ Copied {html_file}")
             else:
-                print(f"  ⚠ Missing {html_file}")
+                print(f"   ⚠ Missing {html_file}")
 
         # Copy image files
         image_files = list(folder.glob('image_*.png')) + list(folder.glob('image_*.jpg'))
@@ -64,10 +131,23 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
             total_images += 1
 
         if image_files:
-            print(f"  ✓ Copied {len(image_files)} image(s)")
+            print(f"   ✓ Copied {len(image_files)} image(s)")
 
+        print(f"   📅 Last updated: {metadata['last_updated']}")
         total_questions += 1
         print()
+
+    # Save metadata to JSON file in the output directory
+    metadata_file = output_path / 'upload_metadata.json'
+    with open(metadata_file, 'w', encoding='utf-8') as f:
+        json.dump({
+            "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "total_questions": total_questions,
+            "total_images": total_images,
+            "questions": metadata_list
+        }, f, indent=2)
+
+    print(f"✅ Created metadata file: upload_metadata.json")
 
     print("=" * 50)
     print("✅ Package created successfully!")
@@ -82,6 +162,7 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
     if create_zip:
         zip_name = f"{output_dir}.zip"
         zip_path = create_zip_file(output_path, zip_name)
+
         if zip_path:
             print(f"✅ Created ZIP file: {zip_path}")
             print(f"   Size: {os.path.getsize(zip_path) / 1024:.1f} KB")
@@ -148,6 +229,7 @@ def validate_folder_structure(folder_path: str) -> bool:
 
     # Check required files
     required_files = ['summary_question.html', 'summary_discussion_ai.html']
+
     for req_file in required_files:
         file_path = folder / req_file
         if not file_path.exists():
@@ -168,6 +250,11 @@ def validate_folder_structure(folder_path: str) -> bool:
                 warnings.append(f"Unsupported image format: {img.name}")
     else:
         warnings.append("No images found (optional)")
+
+    # Get and display last_updated
+    last_updated = get_folder_last_modified(folder)
+    if last_updated:
+        print(f"📅 Last updated: {last_updated}")
 
     # Report results
     print()
@@ -269,12 +356,27 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
     print(f"Creating ZIP file: {zip_name}")
 
     try:
-        with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            # Find all topic folders
-            topic_folders = [d for d in source_path.iterdir() 
-                           if d.is_dir() and d.name.startswith('topic_')]
+        # Create metadata for all questions
+        topic_folders = [d for d in source_path.iterdir() 
+                        if d.is_dir() and d.name.startswith('topic_')]
 
+        metadata_list = []
+        for folder in topic_folders:
+            metadata = create_question_metadata(folder)
+            metadata_list.append(metadata)
+
+        # Create temporary metadata file
+        temp_metadata = source_path / 'upload_metadata.json'
+        with open(temp_metadata, 'w', encoding='utf-8') as f:
+            json.dump({
+                "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                "total_questions": len(topic_folders),
+                "questions": metadata_list
+            }, f, indent=2)
+
+        with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
             file_count = 0
+
             for folder in topic_folders:
                 # Add all files from this folder
                 for file_path in folder.rglob('*'):
@@ -284,7 +386,15 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
                         zipf.write(file_path, arcname)
                         file_count += 1
 
+            # Add metadata file
+            zipf.write(temp_metadata, 'upload_metadata.json')
+            file_count += 1
+
+        # Remove temporary metadata file
+        temp_metadata.unlink()
+
         zip_path = Path(zip_name).absolute()
+
         print()
         print("=" * 50)
         print("✅ ZIP file created successfully!")
@@ -299,6 +409,8 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
 
     except Exception as e:
         print(f"❌ Error creating ZIP: {str(e)}")
+        if temp_metadata.exists():
+            temp_metadata.unlink()
         return None
 
 def interactive_menu():
