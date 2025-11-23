@@ -303,8 +303,8 @@ def generate_offline_html(exam_name: str, exam_data: Dict[str, Any], last_update
     count = len(questions)
     
     # If last_updated not provided, try to get it
-    if last_updated is None:
-        last_updated = get_folder_last_modified(exam_name)
+    # if last_updated is None:
+    #     last_updated = get_folder_last_modified(exam_name)
     
     html = f'''<!DOCTYPE html>
 <html><head>
@@ -579,9 +579,9 @@ def download_exam_handler(exam_name: str):
     
     try:
         # Get last modified time
-        last_updated = get_folder_last_modified(exam_name)
+        # last_updated = get_folder_last_modified(exam_name)
 
-        html = generate_offline_html(exam_name, exam_data, last_updated)
+        html = generate_offline_html(exam_name, exam_data)
         filename = f"{exam_name.replace(' ', '_')}_offline.html"
         
         st.download_button(
