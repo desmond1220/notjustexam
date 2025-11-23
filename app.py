@@ -98,6 +98,8 @@ def get_question_folder_last_modified(exam_name: str, topic_index: int, question
     folder_name = f"topic{topic_index}_question{question_index}"
     folder_path = DATA_DIR / exam_name / folder_name
     
+    print(folder_path)
+    print(not folder_path.exists())
     if not folder_path.exists():
         return "Unknown"
     
