@@ -95,7 +95,7 @@ def initialize_session_state():
 
 def get_question_folder_last_modified(exam_name: str, topic_index: int, question_index: int) -> str:
     """Get the last modified time of files in a specific question folder"""
-    folder_name = f"topic{topic_index}_question{question_index}"
+    folder_name = f"topic_{topic_index}_question_{question_index}"
     folder_path = DATA_DIR / exam_name / folder_name
     
     print(folder_path)
