@@ -92,6 +92,31 @@ def initialize_session_state():
         st.session_state.password_attempt = {}
 
 
+def get_folder_last_modified(exam_name: str) -> str:
+    """Get the last modified time of the most recent file in the question folder"""
+    exam_dir = DATA_DIR / exam_name
+    if not exam_dir.exists():
+        return "Unknown"
+    
+    latest_time = 0
+    
+    # Check all files in the exam directory recursively
+    for root, dirs, files in os.walk(exam_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+            try:
+                mtime = os.path.getmtime(file_path)
+                if mtime > latest_time:
+                    latest_time = mtime
+            except OSError:
+                continue
+    
+    if latest_time == 0:
+        return "Unknown"
+    
+    # Convert to readable format
+    return datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
+
 
 def hash_password(password: str) -> str:
     """Hash password using SHA-256"""
@@ -272,9 +297,13 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
 def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
-    questions = exam_data['questions']
-    exam_title = exam_data.get('exam_name', exam_name)
+    questions = exam_data["questions"]
+    exam_title = exam_data.get("exam_name", exam_name)
     count = len(questions)
+    
+    # If last_updated not provided, try to get it
+    if last_updated is None:
+        last_updated = get_folder_last_modified(exam_name)
     
     html = f'''<!DOCTYPE html>
 <html><head>
@@ -322,11 +351,23 @@ body{{padding:4px}}
 .btn{{font-size:14px;padding:10px 14px}}
 #counter{{width:100%;order:-1;margin-bottom:8px;text-align:center}}
 }}
+.last-updated {{
+    background: #f8f9fa;
+    padding: 8px 16px;
+    text-align: center;
+    font-size: 13px;
+    color: #6c757d;
+    border-bottom: 1px solid #e9ecef;
+}}
 </style>
 </head>
 <body>
 <div class="container">
-<div class="header"><h1>📚 {exam_title}</h1><div>{count} Questions | Offline Mode</div></div>
+<div class="header"><h1>📚 {exam_title}</h1><div>{count} Questions | Offline Mode</div>
+<div class="last-updated">
+    📅 Last Updated: {last_updated}
+</div>
+</div>
 <div class="nav">
 <button class="btn btn-secondary" onclick="prev()" id="prev">◀ Prev</button>
 <select id="qselect" class="btn" onchange="jump(this.value)"></select>
@@ -506,7 +547,10 @@ def download_exam_handler(exam_name: str):
         return
     
     try:
-        html = generate_offline_html(exam_name, exam_data)
+        # Get last modified time
+        last_updated = get_folder_last_modified(exam_name)
+
+        html = generate_offline_html(exam_name, exam_data, last_updated)
         filename = f"{exam_name.replace(' ', '_')}_offline.html"
         
         st.download_button(
