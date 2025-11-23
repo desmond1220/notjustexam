@@ -4,6 +4,7 @@ A Streamlit application for managing and studying exam dumps
 Enhanced with ZIP file upload support
 """
 
+import time
 import streamlit as st
 import json
 import os
@@ -92,18 +93,19 @@ def initialize_session_state():
         st.session_state.password_attempt = {}
 
 
-def get_folder_last_modified(exam_name: str) -> str:
-    """Get the last modified time of the most recent file in the question folder"""
-    exam_dir = DATA_DIR / exam_name
-    if not exam_dir.exists():
+def get_question_folder_last_modified(exam_name: str, topic_index: int, question_index: int) -> str:
+    """Get the last modified time of files in a specific question folder"""
+    folder_name = f"topic{topic_index}_question{question_index}"
+    folder_path = DATA_DIR / exam_name / folder_name
+    
+    if not folder_path.exists():
         return "Unknown"
     
     latest_time = 0
     
-    # Check all files in the exam directory recursively
-    for root, dirs, files in os.walk(exam_dir):
-        for file in files:
-            file_path = os.path.join(root, file)
+    # Check all files in this specific question folder
+    for file_path in folder_path.rglob('*'):
+        if file_path.is_file():
             try:
                 mtime = os.path.getmtime(file_path)
                 if mtime > latest_time:
@@ -114,7 +116,6 @@ def get_folder_last_modified(exam_name: str) -> str:
     if latest_time == 0:
         return "Unknown"
     
-    # Convert to readable format
     return datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
 
 
@@ -351,13 +352,38 @@ body{{padding:4px}}
 .btn{{font-size:14px;padding:10px 14px}}
 #counter{{width:100%;order:-1;margin-bottom:8px;text-align:center}}
 }}
-.last-updated {{
+.question-meta {{
     background: #f8f9fa;
-    padding: 8px 16px;
-    text-align: center;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    border-radius: 6px;
     font-size: 13px;
     color: #6c757d;
-    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}}
+
+.last-updated-badge {{
+    background: #e3f2fd;
+    padding: 4px 10px;
+    border-radius: 4px;
+    color: #1976d2;
+    font-size: 12px;
+    white-space: nowrap;
+}}
+
+@media (max-width: 768px) {{
+    .question-meta {{
+        font-size: 12px;
+    }}
+    
+    .last-updated-badge {{
+        font-size: 11px;
+        padding: 3px 8px;
+    }}
 }}
 </style>
 </head>
@@ -383,6 +409,7 @@ body{{padding:4px}}
         topic = q.get('topic_index', 1)
         qnum = q.get('question_index', 1)
         text = q.get('question', 'No question')
+        last_updated = q.get("last_updated", "Unknown")
         choices = q.get('choices', {})
         
         # Get the correct answer - handle both suggested_answer and correct_answer
@@ -441,6 +468,10 @@ body{{padding:4px}}
         html += f'''
 <div class="question" id="q{i}" style="display:{'block' if i==0 else 'none'}">
 <h3>Topic {topic} - Question {qnum}</h3>
+            <div class="question-meta">
+                <span>Question {i+1} of {count}</span>
+                <span class="last-updated-badge">📅 Updated: {last_updated}</span>
+            </div>
 <div class="question-text">{formatted_text}</div>
 {imgs}
 <div>{opts}</div>
@@ -890,17 +921,41 @@ def process_uploaded_folders(uploaded_files: List, exam_name: str) -> List[Dict[
     return questions
 
 def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
-    """Process uploaded ZIP file and extract question data"""
+    """Process uploaded ZIP file and extract question data with last modified times"""
     questions = []
-
+    
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-
-        # Extract ZIP contents
         folders = extract_zip_file(zip_file, temp_path)
-
-        # Process each folder
+        
         for folder_name, files in folders.items():
+            folder_info = parse_folder_name(folder_name)
+            if not folder_info:
+                continue
+            
+            question_data = {
+                "topic_index": folder_info["topic_index"],
+                "question_index": folder_info["question_index"],
+                "question_name": f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
+            }
+            
+            # Calculate last modified time for this folder's files
+            latest_time = 0
+            for file_name, file_content in files.items():
+                # Get the timestamp from uploaded files (or use current time as fallback)
+                try:
+                    # For ZIP files, we'll use current time, but mark that it was just uploaded
+                    current_time = time.time()
+                    if current_time > latest_time:
+                        latest_time = current_time
+                except:
+                    pass
+            
+            if latest_time > 0:
+                question_data["last_updated"] = datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
             folder_info = parse_folder_name(folder_name)
             if not folder_info:
                 continue
@@ -988,12 +1043,27 @@ def save_exam(exam_name: str, questions: List[Dict[str, Any]], password: str = N
         json.dump(exam_data, f, indent=2, ensure_ascii=False)
 
 def load_exam(exam_name: str) -> Dict[str, Any]:
-    """Load exam data from JSON file"""
+    """Load exam data from JSON file and ensure last_updated timestamps exist"""
     exam_file = DATA_DIR / exam_name / "exam_data.json"
+    
     if exam_file.exists():
         with open(exam_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            exam_data = json.load(f)
+        
+        # Add last_updated timestamps to questions if not present
+        for question in exam_data.get("questions", []):
+            if "last_updated" not in question:
+                # Get the actual folder modification time
+                topic_idx = question.get("topic_index", 1)
+                question_idx = question.get("question_index", 1)
+                question["last_updated"] = get_question_folder_last_modified(
+                    exam_name, topic_idx, question_idx
+                )
+        
+        return exam_data
+    
     return None
+
 
 def list_exams() -> List[str]:
     """List all available exams"""
