@@ -294,7 +294,7 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
 
 
 
-def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
+def generate_offline_html(exam_name: str, exam_data: Dict[str, Any], last_updated: str = None) -> str:
     """Generate self-contained HTML file for offline study with proper formatting"""
     
     questions = exam_data["questions"]
