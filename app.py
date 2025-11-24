@@ -412,16 +412,7 @@ body{{padding:4px}}
         choices = q.get('choices', {})
         
         # Get the correct answer - handle both suggested_answer and correct_answer
-        ans = q.get('suggested_answer', q.get('correct_answer', ''))
-        
-        # Normalize the correct answer: strip whitespace and convert to uppercase
-        # Handle None, empty strings, and various formats
-        if ans is None:
-            ans_normalized = ''
-        elif isinstance(ans, str):
-            ans_normalized = ans.strip().upper()
-        else:
-            ans_normalized = str(ans).strip().upper()
+        ans = q.get('suggested_answer', q.get('correct_answer', []))
         
         # Remove duplicate chunks (if text was accidentally duplicated)
         text = remove_duplicate_chunks(text, min_chunk_size=100)
@@ -435,11 +426,11 @@ body{{padding:4px}}
                 letter_normalized = str(letter).strip().upper()
                 
                 # Simple, robust comparison: normalized letter matches normalized answer
-                is_correct = (letter_normalized[0] == ans_normalized.strip().upper()[0])
+                is_correct = letter_normalized[0] in ans
                 correct_str = "true" if is_correct else "false"
                 
                 # Use original letter for display, normalized for data attribute
-                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice} [{letter_normalized} = {ans_normalized}]</div>'
+                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
         
         # Embed question images
         imgs = ""
@@ -761,12 +752,12 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
-            match = re.search(r'Suggested Answer[:\\s]+([A-Z])', suggested_answer_text)
-            if match:
-                result['suggested_answer'] = match.group(1)
+            characters_answers = suggested_answer_text.upper().replace("SUGGESTED ANSWER: ")
+            if characters_answers and len(characters_answers) <= 3:
+                result['suggested_answer'] = list(characters_answers)
             else:
                 # For HOTSPOT questions, the answer might be descriptive
-                result['suggested_answer'] = suggested_answer_text
+                result['suggested_answer'] = ['See Discussion']
             
             # Extract images from ANSWER HTML only  
             images = answer_div.find_all('img')
