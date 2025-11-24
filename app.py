@@ -960,6 +960,23 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
                 "question_index": folder_info["question_index"],
                 "question_name": f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
             }
+            
+            # Try to read last_update_date from metadata.json
+            if 'metadata.json' in files:
+                try:
+                    metadata_content = files['metadata.json']
+                    if isinstance(metadata_content, bytes):
+                        metadata_content = metadata_content.decode('utf-8')
+                    
+                    metadata = json.loads(metadata_content)
+                    last_update_date = metadata.get('last_update_date', 'Unknown')
+                    
+                    question_data["last_updated"] = last_update_date
+                    
+                except Exception as e:
+                    question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Get last_updated from metadata if available, otherwise calculate from files
             if folder_name in metadata_map:
