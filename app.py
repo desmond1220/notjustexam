@@ -1088,7 +1088,7 @@ def load_question_metadata(exam_name: str, topic_index: int, question_index: int
     folder_name = f"topic_{topic_index}_question_{question_index}"
     metadata_path = DATA_DIR / exam_name / folder_name / "metadata.json"
     print(metadata_path)
-    files = os.listdir(metadata_path)
+    files = os.listdir(DATA_DIR / exam_name / folder_name)
     print(files)
     
     if metadata_path.exists():
