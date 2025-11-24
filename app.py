@@ -849,6 +849,8 @@ def extract_zip_file(zip_file, temp_dir: Path) -> Dict[str, Dict[str, bytes]]:
                 # Read file content
                 folders[folder_name][file_basename] = zip_ref.read(file_info.filename)
 
+    print(folders)
+
     return folders
 
 def process_uploaded_folders(uploaded_files: List, exam_name: str) -> List[Dict[str, Any]]:
@@ -982,25 +984,6 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
             else:
                 question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # Get last_updated from metadata if available, otherwise calculate from files
-            if folder_name in metadata_map:
-                question_data["last_updated"] = metadata_map[folder_name].get('last_updated', 'Unknown')
-            else:
-                # Fallback: Calculate last modified time for this folder's files
-                latest_time = 0
-                for file_name, file_content in files.items():
-                    try:
-                        # For ZIP files without metadata, use current upload time
-                        current_time = time.time()
-                        if current_time > latest_time:
-                            latest_time = current_time
-                    except:
-                        pass
-
-                if latest_time > 0:
-                    question_data["last_updated"] = datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
             # Process summary_question.html
             if 'summary_question.html' in files:
