@@ -752,7 +752,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
-            characters_answers = suggested_answer_text.upper().replace("SUGGESTED ANSWER: ")
+            characters_answers = suggested_answer_text.strip().upper().replace("SUGGESTED ANSWER: ", "")
             if characters_answers and len(characters_answers) <= 3:
                 result['suggested_answer'] = list(characters_answers)
             else:
