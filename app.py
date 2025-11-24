@@ -962,6 +962,8 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
             }
             
             # Try to read last_update_date from metadata.json
+            print('metadata.json' in files)
+            print(files)
             if 'metadata.json' in files:
                 try:
                     metadata_content = files['metadata.json']
@@ -971,6 +973,8 @@ def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
                     metadata = json.loads(metadata_content)
                     last_update_date = metadata.get('last_update_date', 'Unknown')
                     
+                    print(last_update_date)
+
                     question_data["last_updated"] = last_update_date
                     
                 except Exception as e:
