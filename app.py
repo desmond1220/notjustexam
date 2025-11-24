@@ -1093,17 +1093,18 @@ def load_exam(exam_name: str) -> Dict[str, Any]:
         
         # Add last_updated timestamps from metadata.json files
         for question in exam_data.get("questions", []):
-            topic_idx = question.get("topic_index", 1)
-            question_idx = question.get("question_index", 1)
+            print(question)
+            # topic_idx = question.get("topic_index", 1)
+            # question_idx = question.get("question_index", 1)
             
-            # Load from metadata.json ONLY
-            metadata = load_question_metadata(exam_name, topic_idx, question_idx)
-            if metadata and "last_update_date" in metadata:
-                # Use the timestamp from metadata.json
-                question["last_updated"] = metadata["last_update_date"]
-            else:
-                # Don't calculate from file times - use Unknown if no metadata
-                question["last_updated"] = "Unknown"
+            # # Load from metadata.json ONLY
+            # metadata = load_question_metadata(exam_name, topic_idx, question_idx)
+            # if metadata and "last_update_date" in metadata:
+            #     # Use the timestamp from metadata.json
+            #     question["last_updated"] = metadata["last_update_date"]
+            # else:
+            #     # Don't calculate from file times - use Unknown if no metadata
+            #     question["last_updated"] = "Unknown"
         
         return exam_data
     return None
