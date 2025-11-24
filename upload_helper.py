@@ -43,32 +43,31 @@ def get_folder_last_modified(folder_path: Path) -> str:
 
     return datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
 
-def create_question_metadata(folder_path: Path) -> dict:
+def create_question_metadata(folderpath: Path) -> dict:
     """
-    Create metadata for a question folder including last_updated timestamp
-
+    Create metadata for a question folder including last_update_date timestamp.
+    
     Args:
-        folder_path: Path to the question folder
-
+        folderpath: Path to the question folder
+        
     Returns:
-        Dictionary with metadata including last_updated
+        Dictionary with metadata including last_update_date
     """
     metadata = {
-        "folder_name": folder_path.name,
-        "last_updated": get_folder_last_modified(folder_path) or datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        "folder_name": folderpath.name,
+        "last_update_date": get_folder_last_modified(folderpath) or datetime.now().strftime("%Y-%m-%d %H:%M:%S HKT")
     }
-
+    
     # Check for HTML files
-    has_question = (folder_path / 'summary_question.html').exists()
-    has_discussion = (folder_path / 'summary_discussion_ai.html').exists()
-
+    has_question = (folderpath / "summary_question.html").exists()
+    has_discussion = (folderpath / "summary_discussion_ai.html").exists()
     metadata["has_question"] = has_question
     metadata["has_discussion"] = has_discussion
-
+    
     # Count images
-    image_files = list(folder_path.glob('image_*.png')) + list(folder_path.glob('image_*.jpg'))
+    image_files = list(folderpath.glob("image*.png")) + list(folderpath.glob("image*.jpg"))
     metadata["image_count"] = len(image_files)
-
+    
     return metadata
 
 def create_upload_package(source_dir: str, output_dir: str = "upload_package", create_zip: bool = True):

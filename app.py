@@ -1100,11 +1100,6 @@ def load_question_metadata(exam_name: str, topic_index: int, question_index: int
 def load_exam(exam_name: str) -> Dict[str, Any]:
     """Load exam data from JSON file and populate last_updated from metadata.json"""
     exam_file = DATA_DIR / exam_name / "exam_data.json"
-    
-    print(DATA_DIR / exam_name)
-    files = os.listdir(DATA_DIR / exam_name)
-    print(files)
-
     if exam_file.exists():
         with open(exam_file, 'r', encoding='utf-8') as f:
             exam_data = json.load(f)
@@ -1116,19 +1111,16 @@ def load_exam(exam_name: str) -> Dict[str, Any]:
             
             # Try to load from metadata.json first
             metadata = load_question_metadata(exam_name, topic_idx, question_idx)
-            
             if metadata and "last_update_date" in metadata:
                 # Use the timestamp from metadata.json
                 question["last_updated"] = metadata["last_update_date"]
             elif "last_updated" not in question:
                 # Fallback: calculate from file modification times
-                question["last_updated"] = get_question_folder_last_modified(
-                    exam_name, topic_idx, question_idx
-                )
+                question["last_updated"] = get_question_folder_last_modified(exam_name, topic_idx, question_idx)
         
         return exam_data
-    
     return None
+
 
 
 def list_exams() -> List[str]:
