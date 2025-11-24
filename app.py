@@ -426,8 +426,11 @@ body{{padding:4px}}
                 # Normalize the choice letter for comparison
                 letter_normalized = str(letter).strip().upper()
                 
-                # Simple, robust comparison: normalized letter matches normalized answer
-                is_correct = letter_normalized[0] in ans
+                if letter_normalized:
+                    # Simple, robust comparison: normalized letter matches normalized answer
+                    is_correct = letter_normalized[0] in ans
+                else:
+                    is_correct = False
                 correct_str = "true" if is_correct else "false"
                 
                 # Use original letter for display, normalized for data attribute
