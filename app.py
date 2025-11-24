@@ -1087,9 +1087,6 @@ def load_question_metadata(exam_name: str, topic_index: int, question_index: int
     """
     folder_name = f"topic_{topic_index}_question_{question_index}"
     metadata_path = DATA_DIR / exam_name / folder_name / "metadata.json"
-    print(metadata_path)
-    files = os.listdir(DATA_DIR / exam_name / folder_name)
-    print(files)
     
     if metadata_path.exists():
         try:
@@ -1104,6 +1101,10 @@ def load_exam(exam_name: str) -> Dict[str, Any]:
     """Load exam data from JSON file and populate last_updated from metadata.json"""
     exam_file = DATA_DIR / exam_name / "exam_data.json"
     
+    print(DATA_DIR / exam_name)
+    files = os.listdir(DATA_DIR / exam_name)
+    print(files)
+
     if exam_file.exists():
         with open(exam_file, 'r', encoding='utf-8') as f:
             exam_data = json.load(f)
