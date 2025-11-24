@@ -763,7 +763,7 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
                 result['suggested_answer'] = list(characters_answers)
             else:
                 # For HOTSPOT questions, the answer might be descriptive
-                result['suggested_answer'] = ['See Discussion']
+                result['suggested_answer'] = [suggested_answer_text]
             
             # Extract images from ANSWER HTML only  
             images = answer_div.find_all('img')
