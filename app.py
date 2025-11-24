@@ -413,6 +413,11 @@ body{{padding:4px}}
         
         # Get the correct answer - handle both suggested_answer and correct_answer
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
+
+        print(topic)
+        print(choices)
+        print(ans)
+        print("="*20)
         
         # Normalize the correct answer: strip whitespace and convert to uppercase
         # Handle None, empty strings, and various formats
@@ -1090,21 +1095,6 @@ def load_exam(exam_name: str) -> Dict[str, Any]:
     if exam_file.exists():
         with open(exam_file, 'r', encoding='utf-8') as f:
             exam_data = json.load(f)
-        
-        # Add last_updated timestamps from metadata.json files
-        for question in exam_data.get("questions", []):
-            print(question)
-            # topic_idx = question.get("topic_index", 1)
-            # question_idx = question.get("question_index", 1)
-            
-            # # Load from metadata.json ONLY
-            # metadata = load_question_metadata(exam_name, topic_idx, question_idx)
-            # if metadata and "last_update_date" in metadata:
-            #     # Use the timestamp from metadata.json
-            #     question["last_updated"] = metadata["last_update_date"]
-            # else:
-            #     # Don't calculate from file times - use Unknown if no metadata
-            #     question["last_updated"] = "Unknown"
         
         return exam_data
     return None
