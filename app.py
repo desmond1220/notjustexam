@@ -1109,14 +1109,14 @@ def load_exam(exam_name: str) -> Dict[str, Any]:
             topic_idx = question.get("topic_index", 1)
             question_idx = question.get("question_index", 1)
             
-            # Try to load from metadata.json first
+            # Load from metadata.json ONLY
             metadata = load_question_metadata(exam_name, topic_idx, question_idx)
             if metadata and "last_update_date" in metadata:
                 # Use the timestamp from metadata.json
                 question["last_updated"] = metadata["last_update_date"]
-            elif "last_updated" not in question:
-                # Fallback: calculate from file modification times
-                question["last_updated"] = get_question_folder_last_modified(exam_name, topic_idx, question_idx)
+            else:
+                # Don't calculate from file times - use Unknown if no metadata
+                question["last_updated"] = "Unknown"
         
         return exam_data
     return None
