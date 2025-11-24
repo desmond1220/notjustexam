@@ -18,7 +18,8 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import io
 import hashlib
-import base64  # ADD THIS
+import base64
+import traceback
 
 
 
@@ -586,6 +587,8 @@ def download_exam_handler(exam_name: str):
         st.info("📱 Works on all devices - mobile, tablet, desktop")
     except Exception as e:
         st.error(f"Error: {str(e)}")
+        st.error("**Full Stack Trace:**")
+        st.code(traceback.format_exc(), language="python")
 
 
 
