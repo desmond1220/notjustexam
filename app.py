@@ -758,12 +758,12 @@ def extract_html_content(html_content: str, content_type: str) -> Dict[str, Any]
             suggested_answer_text = answer_div.get_text(separator=' ', strip=True)
             
             # Try to find answer letter
-            characters_answers = suggested_answer_text.strip().upper().replace("SUGGESTED ANSWER: ", "")
+            characters_answers = suggested_answer_text.strip().upper().replace("SUGGESTED ANSWER: ", "").split(" ")[0]
             if characters_answers and len(characters_answers) <= 3:
                 result['suggested_answer'] = list(characters_answers)
             else:
                 # For HOTSPOT questions, the answer might be descriptive
-                result['suggested_answer'] = [suggested_answer_text]
+                result['suggested_answer'] = ['See Discussion']
             
             # Extract images from ANSWER HTML only  
             images = answer_div.find_all('img')
