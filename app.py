@@ -434,7 +434,7 @@ body{{padding:4px}}
                 correct_str = "true" if is_correct else "false"
                 
                 # Use original letter for display, normalized for data attribute
-                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice} [{letter_normalized} - {"|".join(ans)}]</div>'
+                opts += f'<div class="option" data-opt="{letter}" data-cor="{correct_str}" onclick="sel(this,{i})"><b>{letter}.</b> {choice}</div>'
         
         # Embed question images
         imgs = ""
