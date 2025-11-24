@@ -297,9 +297,8 @@ def remove_duplicate_chunks(text: str, min_chunk_size: int = 150) -> str:
 
 
 
-def generate_offline_html(exam_name: str, exam_data: Dict[str, Any], last_updated: str = None) -> str:
-    """Generate self-contained HTML file for offline study with proper formatting"""
-    
+def generate_offline_html(exam_name: str, exam_data: Dict[str, Any]) -> str:
+    """Generate self-contained HTML file with per-question last updated times"""
     questions = exam_data["questions"]
     exam_title = exam_data.get("exam_name", exam_name)
     count = len(questions)
@@ -403,6 +402,32 @@ body{{padding:4px}}
 <div style="height:4px;background:#e9ecef"><div class="progress-bar" id="prog" style="width:0%"></div></div>
 <div id="qs">'''
     
+    # Add CSS for timestamp badge
+    timestamp_css = """
+        .question-meta {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            margin-bottom: 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #6c757d;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .last-updated-badge {
+            background: #e3f2fd;
+            padding: 4px 10px;
+            border-radius: 4px;
+            color: #1976d2;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+    """
+
     # Add questions
     for i, q in enumerate(questions):
         topic = q.get('topic_index', 1)
@@ -920,135 +945,87 @@ def process_uploaded_folders(uploaded_files: List, exam_name: str) -> List[Dict[
     return questions
 
 def process_zip_file(zip_file, exam_name: str) -> List[Dict[str, Any]]:
-    """Process uploaded ZIP file and extract question data with last modified times"""
+    """Process uploaded ZIP file and extract question data with metadata support"""
     questions = []
     
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
-        folders = extract_zip_file(zip_file, temp_path)
-
-        # Try to load metadata if it exists in the ZIP
-        metadata_map = {}
-        if 'upload_metadata.json' in folders:
-            try:
-                metadata_content = folders['upload_metadata.json']
-                if isinstance(metadata_content, bytes):
-                    metadata_content = metadata_content.decode('utf-8')
-                metadata = json.loads(metadata_content)
-
-                # Create a map of folder_name -> metadata
-                for q_meta in metadata.get('questions', []):
-                    folder_name = q_meta.get('folder_name')
-                    if folder_name:
-                        metadata_map[folder_name] = q_meta
-
-                st.info(f"📋 Loaded metadata for {len(metadata_map)} questions from upload_metadata.json")
-            except Exception as e:
-                st.warning(f"Could not parse upload_metadata.json: {e}")
-
-        for folder_name, files in folders.items():
-            # Skip the metadata file itself
-            if folder_name == 'upload_metadata.json':
-                continue
-
-            folder_info = parse_folder_name(folder_name)
+        
+        # Extract ZIP file
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            zip_ref.extractall(temp_path)
+        
+        # Find all topic folders
+        topic_folders = sorted([d for d in temp_path.rglob("*") 
+                               if d.is_dir() and d.name.startswith("topic_")])
+        
+        for folder in topic_folders:
+            folder_info = parse_folder_name(folder.name)
             if not folder_info:
                 continue
-
+            
             question_data = {
                 "topic_index": folder_info["topic_index"],
                 "question_index": folder_info["question_index"],
                 "question_name": f"Topic {folder_info['topic_index']} - Question {folder_info['question_index']}"
             }
             
-            # Try to read last_update_date from metadata.json
-            if 'metadata.json' in files:
+            # Try to load metadata.json for last_updated timestamp
+            metadata_file = folder / "metadata.json"
+            if metadata_file.exists():
                 try:
-                    metadata_content = files['metadata.json']
-                    if isinstance(metadata_content, bytes):
-                        metadata_content = metadata_content.decode('utf-8')
-                    
-                    metadata = json.loads(metadata_content)
-                    last_update_date = metadata.get('last_update_date', 'Unknown')
-                    
-                    question_data["last_updated"] = last_update_date
-                    
+                    with open(metadata_file, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        if "last_update_date" in metadata:
+                            question_data["last_updated"] = metadata["last_update_date"]
+                            print(f"✓ Loaded timestamp from metadata.json: {metadata['last_update_date']}")
                 except Exception as e:
-                    question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            else:
+                    print(f"Warning: Could not read metadata.json for {folder.name}: {e}")
+            
+            # Fallback if no metadata.json or no last_update_date
+            if "last_updated" not in question_data:
                 question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            # Get last_updated from metadata if available, otherwise calculate from files
-            if folder_name in metadata_map:
-                question_data["last_updated"] = metadata_map[folder_name].get('last_updated', 'Unknown')
-            else:
-                # Fallback: Calculate last modified time for this folder's files
-                latest_time = 0
-                for file_name, file_content in files.items():
-                    try:
-                        # For ZIP files without metadata, use current upload time
-                        current_time = time.time()
-                        if current_time > latest_time:
-                            latest_time = current_time
-                    except:
-                        pass
-
-                if latest_time > 0:
-                    question_data["last_updated"] = datetime.fromtimestamp(latest_time).strftime('%Y-%m-%d %H:%M:%S')
-                else:
-                    question_data["last_updated"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-            # Process summary_question.html
-            if 'summary_question.html' in files:
-                content = files['summary_question.html'].decode('utf-8')
-                question_content = extract_html_content(content, 'question')
-                question_data.update(question_content)
-
-            # Process summary_discussion_ai.html
-            if 'summary_discussion_ai.html' in files:
-                content = files['summary_discussion_ai.html'].decode('utf-8')
-                answer_content = extract_html_content(content, 'answer')
-                question_data.update(answer_content)
-
-            # Save images - NOW SEPARATE THEM
-            image_files = [f for f in files.keys() if f.startswith('image_') and f.endswith(('.png', '.jpg', '.jpeg'))]
-            if image_files:
-                exam_images_dir = DATA_DIR / exam_name / "images"
-                exam_images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Process question HTML
+            summary_question = folder / "summary_question.html"
+            if summary_question.exists():
+                with open(summary_question, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                    question_data["question"] = parse_question_html(html_content)
+                    question_data["choices"] = parse_choices_html(html_content)
+                    question_data["correct_answer"] = parse_correct_answer_html(html_content)
+            
+            # Process discussion HTML
+            summary_discussion = folder / "summary_discussion_ai.html"
+            if summary_discussion.exists():
+                with open(summary_discussion, 'r', encoding='utf-8') as f:
+                    discussion_content = f.read()
+                    question_data["discussion"] = parse_discussion_html(discussion_content)
+                    question_data["ai_answer"] = parse_ai_answer_html(discussion_content)
+            
+            # Copy images
+            image_files = list(folder.glob("image_*.*"))
+            question_data["images"] = []
+            for img_file in image_files:
+                # Copy to exam images directory
+                dest_dir = DATA_DIR / exam_name / "images"
+                dest_dir.mkdir(parents=True, exist_ok=True)
                 
-                # Save all image files
-                saved_images = []
-                for img_file in image_files:
-                    img_path = exam_images_dir / f"{folder_name}_{img_file}"
-                    content = files[img_file].read() if hasattr(files[img_file], 'read') else files[img_file]
-                    with open(img_path, 'wb') as f:
-                        f.write(content)
-                    saved_images.append(f"{folder_name}_{img_file}")
-                
-                # Determine which images are for question vs answer based on extracted image references
-                question_images = []
-                answer_images = []
-                
-                # If we have image references from HTML, use those to determine placement
-                question_img_refs = question_data.get('question_images', [])
-                answer_img_refs = question_data.get('answer_images', [])
-                
-                for img_file in saved_images:
-                    # Check if image is referenced in question or answer HTML
-                    # If no explicit reference, put in question by default for backward compatibility
-                    if any(ref in img_file for ref in question_img_refs) or not answer_img_refs:
-                        question_images.append(img_file)
-                    if any(ref in img_file for ref in answer_img_refs):
-                        answer_images.append(img_file)
-                
-                question_data['saved_images'] = question_images
-                question_data['answer_images'] = answer_images
-
+                # Prefix image name with folder name to avoid conflicts
+                prefixed_name = f"{folder.name}_{img_file.name}"
+                dest_path = dest_dir / prefixed_name
+                shutil.copy2(img_file, dest_path)
+                question_data["images"].append(img_file.name)
+            
+            # Also copy metadata.json to the permanent location
+            if metadata_file.exists():
+                dest_metadata_dir = DATA_DIR / exam_name / folder.name
+                dest_metadata_dir.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(metadata_file, dest_metadata_dir / "metadata.json")
+            
             questions.append(question_data)
-
-    # Sort questions by topic and question index
-    questions.sort(key=lambda x: (x['topic_index'], x['question_index']))
-
+    
+    questions.sort(key=lambda x: (x["topic_index"], x["question_index"]))
     return questions
 
 def save_exam(exam_name: str, questions: List[Dict[str, Any]], password: str = None):
@@ -1074,20 +1051,50 @@ def save_exam(exam_name: str, questions: List[Dict[str, Any]], password: str = N
     with open(exam_file, 'w', encoding='utf-8') as f:
         json.dump(exam_data, f, indent=2, ensure_ascii=False)
 
+def load_question_metadata(exam_name: str, topic_index: int, question_index: int) -> dict:
+    """Load metadata.json from a specific question folder
+    
+    Args:
+        exam_name: Name of the exam
+        topic_index: Topic index number
+        question_index: Question index number
+    
+    Returns:
+        Dictionary with metadata or empty dict if not found
+    """
+    folder_name = f"topic_{topic_index}_question_{question_index}"
+    metadata_path = DATA_DIR / exam_name / folder_name / "metadata.json"
+    
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading metadata for {folder_name}: {e}")
+            return {}
+    return {}
+
 def load_exam(exam_name: str) -> Dict[str, Any]:
-    """Load exam data from JSON file and ensure last_updated timestamps exist"""
+    """Load exam data from JSON file and populate last_updated from metadata.json"""
     exam_file = DATA_DIR / exam_name / "exam_data.json"
     
     if exam_file.exists():
         with open(exam_file, 'r', encoding='utf-8') as f:
             exam_data = json.load(f)
         
-        # Add last_updated timestamps to questions if not present
+        # Add last_updated timestamps from metadata.json files
         for question in exam_data.get("questions", []):
-            if "last_updated" not in question:
-                # Get the actual folder modification time
-                topic_idx = question.get("topic_index", 1)
-                question_idx = question.get("question_index", 1)
+            topic_idx = question.get("topic_index", 1)
+            question_idx = question.get("question_index", 1)
+            
+            # Try to load from metadata.json first
+            metadata = load_question_metadata(exam_name, topic_idx, question_idx)
+            
+            if metadata and "last_update_date" in metadata:
+                # Use the timestamp from metadata.json
+                question["last_updated"] = metadata["last_update_date"]
+            elif "last_updated" not in question:
+                # Fallback: calculate from file modification times
                 question["last_updated"] = get_question_folder_last_modified(
                     exam_name, topic_idx, question_idx
                 )
