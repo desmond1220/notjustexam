@@ -413,11 +413,6 @@ body{{padding:4px}}
         
         # Get the correct answer - handle both suggested_answer and correct_answer
         ans = q.get('suggested_answer', q.get('correct_answer', ''))
-
-        print(topic)
-        print(choices)
-        print(ans)
-        print("="*20)
         
         # Normalize the correct answer: strip whitespace and convert to uppercase
         # Handle None, empty strings, and various formats
@@ -440,7 +435,7 @@ body{{padding:4px}}
                 letter_normalized = str(letter).strip().upper()
                 
                 # Simple, robust comparison: normalized letter matches normalized answer
-                is_correct = (letter_normalized == ans_normalized)
+                is_correct = (letter_normalized[0] == ans_normalized.strip().upper()[0])
                 correct_str = "true" if is_correct else "false"
                 
                 # Use original letter for display, normalized for data attribute
