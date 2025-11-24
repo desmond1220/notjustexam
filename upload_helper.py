@@ -3,7 +3,7 @@ File Upload Helper Script (Enhanced)
 
 This script helps prepare your question folders for upload to NotJustExam
 
-Now with automatic ZIP file creation and last_updated timestamp tracking!
+Now with automatic ZIP file creation and metadata.json support!
 """
 
 import os
@@ -101,6 +101,8 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
     total_questions = 0
     total_images = 0
     metadata_list = []
+    folders_with_metadata = 0
+    folders_without_metadata = 0
 
     # Process each folder
     for folder in topic_folders:
@@ -124,6 +126,25 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
             else:
                 print(f"   ⚠ Missing {html_file}")
 
+        # Copy metadata.json if exists
+        metadata_json = folder / 'metadata.json'
+        if metadata_json.exists():
+            shutil.copy2(metadata_json, output_folder / 'metadata.json')
+            print(f"   ✓ Copied metadata.json")
+            folders_with_metadata += 1
+
+            # Try to read and show timestamp from metadata.json
+            try:
+                with open(metadata_json, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                    if 'last_update_date' in meta:
+                        print(f"   📅 {meta['last_update_date']}")
+            except:
+                pass
+        else:
+            print(f"   ⚠ Missing metadata.json")
+            folders_without_metadata += 1
+
         # Copy image files
         image_files = list(folder.glob('image_*.png')) + list(folder.glob('image_*.jpg'))
         for img_file in image_files:
@@ -133,7 +154,6 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
         if image_files:
             print(f"   ✓ Copied {len(image_files)} image(s)")
 
-        print(f"   📅 Last updated: {metadata['last_updated']}")
         total_questions += 1
         print()
 
@@ -147,14 +167,22 @@ def create_upload_package(source_dir: str, output_dir: str = "upload_package", c
             "questions": metadata_list
         }, f, indent=2)
 
-    print(f"✅ Created metadata file: upload_metadata.json")
+    print(f"✅ Created root metadata file: upload_metadata.json")
 
     print("=" * 50)
     print("✅ Package created successfully!")
     print(f"📊 Summary:")
     print(f"   - Total questions: {total_questions}")
+    print(f"   - With metadata.json: {folders_with_metadata}")
+    print(f"   - Without metadata.json: {folders_without_metadata}")
     print(f"   - Total images: {total_images}")
     print(f"   - Output directory: {output_path.absolute()}")
+
+    if folders_without_metadata > 0:
+        print(f"\n⚠️  WARNING: {folders_without_metadata} folders missing metadata.json")
+        print(f"   Run: python metadata_scanner.py {source_dir}")
+        print(f"   This will generate metadata.json files with timestamps")
+
     print()
 
     # Create ZIP file
@@ -240,6 +268,22 @@ def validate_folder_structure(folder_path: str) -> bool:
             if os.path.getsize(file_path) == 0:
                 warnings.append(f"{req_file} is empty")
 
+    # Check for metadata.json
+    metadata_json = folder / 'metadata.json'
+    if metadata_json.exists():
+        print(f"✓ Found: metadata.json")
+        try:
+            with open(metadata_json, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+            if 'last_update_date' in meta:
+                print(f"  📅 {meta['last_update_date']}")
+            else:
+                warnings.append("metadata.json missing 'last_update_date' key")
+        except:
+            warnings.append("metadata.json is invalid/corrupted")
+    else:
+        warnings.append("metadata.json not found - timestamps may not work correctly")
+
     # Check for images
     image_files = list(folder.glob('image_*.*'))
     if image_files:
@@ -251,10 +295,10 @@ def validate_folder_structure(folder_path: str) -> bool:
     else:
         warnings.append("No images found (optional)")
 
-    # Get and display last_updated
+    # Get and display last_updated (fallback method)
     last_updated = get_folder_last_modified(folder)
-    if last_updated:
-        print(f"📅 Last updated: {last_updated}")
+    if last_updated and not metadata_json.exists():
+        print(f"📅 Last modified: {last_updated}")
 
     # Report results
     print()
@@ -361,11 +405,17 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
                         if d.is_dir() and d.name.startswith('topic_')]
 
         metadata_list = []
+        folders_with_metadata = 0
+
         for folder in topic_folders:
             metadata = create_question_metadata(folder)
             metadata_list.append(metadata)
 
-        # Create temporary metadata file
+            # Check if metadata.json exists
+            if (folder / 'metadata.json').exists():
+                folders_with_metadata += 1
+
+        # Create temporary metadata file at root
         temp_metadata = source_path / 'upload_metadata.json'
         with open(temp_metadata, 'w', encoding='utf-8') as f:
             json.dump({
@@ -378,7 +428,7 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
             file_count = 0
 
             for folder in topic_folders:
-                # Add all files from this folder
+                # Add all files from this folder (including metadata.json if present)
                 for file_path in folder.rglob('*'):
                     if file_path.is_file():
                         # Create archive path: topic_X_question_Y/filename
@@ -386,7 +436,7 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
                         zipf.write(file_path, arcname)
                         file_count += 1
 
-            # Add metadata file
+            # Add root metadata file
             zipf.write(temp_metadata, 'upload_metadata.json')
             file_count += 1
 
@@ -401,6 +451,12 @@ def create_zip_from_existing(source_dir: str, zip_name: str = None) -> str:
         print(f"   Path: {zip_path}")
         print(f"   Size: {os.path.getsize(zip_path) / 1024:.1f} KB")
         print(f"   Files: {file_count}")
+        print(f"   Folders with metadata.json: {folders_with_metadata}/{len(topic_folders)}")
+
+        if folders_with_metadata < len(topic_folders):
+            print(f"\n⚠️  {len(topic_folders) - folders_with_metadata} folders missing metadata.json")
+            print(f"   Run: python metadata_scanner.py {source_dir}")
+
         print()
         print("📦 Ready to upload to NotJustExam!")
         print("=" * 50)
